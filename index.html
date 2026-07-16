@@ -1,0 +1,2209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace Dashboard</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght=500;600;700&family=Inter:wght=400;500;600;700&family=JetBrains+Mono:wght=400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#0a0c10; --bg-2:#0f131a; --panel:rgba(255,255,255,.03); --panel-border:rgba(255,255,255,.08);
+    --ink:#e7ebf1; --ink-dim:#8a93a3; --ink-faint:#5b6474;
+    --accent:#16a34a; /* Sadagaat Green */
+    --accent-2:#3b82f6; /* Sadagaat Blue Accent */
+    --amber:#f5a524; --rose:#fb7185; --violet:#a78bfa;
+    --grid-line:rgba(255,255,255,.025);
+  }
+  .theme-light{
+    --bg:#f4f6f8; --bg-2:#ffffff; --panel:rgba(15,23,42,.035); --panel-border:rgba(15,23,42,.09);
+    --ink:#0f172a; --ink-dim:#5b6474; --ink-faint:#94a3b8; --grid-line:rgba(15,23,42,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 34px 34px;
+    transition:background-color .25s ease, color .25s ease;
+  }
+  .font-display{font-family:'Space Grotesk',sans-serif}
+  .font-mono{font-family:'JetBrains Mono',monospace}
+  .glass{ background:var(--panel); border:1px solid var(--panel-border); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); }
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:var(--panel-border);border-radius:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  .ink{color:var(--ink)} .ink-dim{color:var(--ink-dim)} .ink-faint{color:var(--ink-faint)}
+  [x-cloak]{display:none!important}
+  .tab-btn{position:relative}
+  .tab-btn.active{color:var(--ink); background:var(--panel)}
+  .tab-btn.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:linear-gradient(180deg,var(--accent),var(--accent-2))}
+  .kpi-num{font-variant-numeric:tabular-nums}
+  .fade-in{animation:fadeIn .25s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;letter-spacing:.02em}
+  input,select,textarea{outline:none}
+  input:focus,select:focus,textarea:focus{box-shadow:0 0 0 2px var(--accent)}
+  .scrollbar-thin::-webkit-scrollbar{width:6px}
+  @media (prefers-reduced-motion: reduce){ .fade-in{animation:none} }
+</style>
+</head>
+<body class="theme-dark" x-data="dashboardApp()" x-init="init()" :class="theme === 'light' ? 'theme-light' : 'theme-dark'">
+
+<div x-show="booting" class="fixed inset-0 z-50 flex items-center justify-center" style="background:var(--bg)">
+  <div class="text-center">
+    <div class="w-10 h-10 mx-auto mb-4 rounded-lg border-2 animate-spin" style="border-color:var(--panel-border);border-top-color:var(--accent)"></div>
+    <p class="font-mono text-xs ink-faint tracking-widest">LOADING SECURE WORKSPACE…</p>
+  </div>
+</div>
+
+<div x-show="alertDialog.open" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.65)" @click.self="alertDialog.open = false">
+  <div class="glass max-w-sm w-full rounded-2xl p-6 fade-in shadow-2xl relative" style="background:var(--bg-2)">
+    <div class="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center mb-4 mx-auto" x-show="alertDialog.type==='error'">
+      <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+    </div>
+    <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4 mx-auto" x-show="alertDialog.type==='success'">
+      <i data-lucide="check-circle" class="w-6 h-6"></i>
+    </div>
+    <div class="w-12 h-12 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center mb-4 mx-auto" x-show="alertDialog.type==='info'">
+      <i data-lucide="info" class="w-6 h-6"></i>
+    </div>
+    <h3 class="text-base font-display font-bold text-center mb-2" x-text="alertDialog.title"></h3>
+    <p class="text-xs ink-dim text-center mb-5" x-text="alertDialog.message"></p>
+    <div class="flex gap-2">
+      <button @click="alertDialog.open = false" class="flex-1 py-2 rounded-lg text-xs font-semibold text-white bg-zinc-800 hover:bg-zinc-700 transition">Close</button>
+    </div>
+  </div>
+</div>
+
+<div x-show="confirmDialog.open" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(0,0,0,0.65)" @click.self="confirmDialog.open = false">
+  <div class="glass max-w-sm w-full rounded-2xl p-6 fade-in shadow-2xl relative" style="background:var(--bg-2)">
+    <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center mb-4 mx-auto">
+      <i data-lucide="help-circle" class="w-6 h-6"></i>
+    </div>
+    <h3 class="text-base font-display font-bold text-center mb-2" x-text="confirmDialog.title"></h3>
+    <p class="text-xs ink-dim text-center mb-5" x-text="confirmDialog.message"></p>
+    <div class="flex gap-2">
+      <button @click="confirmDialog.open = false" class="flex-1 py-2 rounded-lg text-xs font-semibold text-zinc-400 bg-zinc-800/50 hover:bg-zinc-800 transition">Cancel</button>
+      <button @click="triggerConfirmedAction()" class="flex-1 py-2 rounded-lg text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition">Proceed</button>
+    </div>
+  </div>
+</div>
+
+<div class="fixed top-4 right-4 z-50 space-y-2 w-80" x-cloak>
+  <template x-for="t in toasts" :key="t.id">
+    <div class="glass rounded-xl px-4 py-3 fade-in shadow-lg flex items-start gap-2"
+         :style="'border-left:3px solid ' + (t.type==='error' ? 'var(--rose)' : t.type==='success' ? 'var(--accent)' : 'var(--accent-2)')">
+      <i :data-lucide="t.type==='error' ? 'alert-triangle' : t.type==='success' ? 'check-circle-2' : 'info'" class="w-4 h-4 mt-0.5 shrink-0"></i>
+      <p class="text-sm" x-text="t.message"></p>
+    </div>
+  </template>
+</div>
+
+<div x-show="!authenticated && !booting" x-cloak class="fixed inset-0 z-40 flex items-center justify-center p-4" style="background:var(--bg)">
+  <div class="glass w-full max-w-sm rounded-2xl p-8 fade-in flex flex-col shadow-2xl relative" style="background:var(--bg-2)">
+    <div class="flex items-center justify-center w-14 h-14 rounded-xl bg-green-500/10 text-emerald-500 mb-5 mx-auto">
+      <i data-lucide="lock" class="w-6 h-6"></i>
+    </div>
+    <h1 class="text-2xl font-display font-semibold text-center mb-1">Workspace Sign In</h1>
+    <p class="text-xs text-center ink-dim mb-6">Enter secure PIN credentials to access workspace database</p>
+    
+    <form @submit.prevent="login" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold ink-dim mb-1.5">Email Address</label>
+        <input x-model="loginData.email" type="email" required class="w-full glass rounded-lg px-4 py-2.5 text-sm bg-black/20 text-white placeholder:ink-faint focus:outline-none transition-colors" placeholder="you@workspace.dev">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold ink-dim mb-1.5">Security PIN</label>
+        <input x-model="loginData.pin" type="password" inputmode="numeric" required class="w-full glass rounded-lg px-4 py-2.5 text-sm bg-black/20 text-white placeholder:ink-faint focus:outline-none transition-colors" placeholder="••••">
+      </div>
+      <div x-show="loginError" x-text="loginError" class="text-xs text-rose-400 text-center bg-rose-500/10 py-2 rounded-lg border border-rose-500/20"></div>
+      
+      <button type="submit" :disabled="authLoading" class="w-full py-2.5 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 transition flex justify-center items-center gap-2 mt-2">
+        <span x-show="!authLoading">Verify & Log In</span>
+        <i x-show="authLoading" data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+      </button>
+    </form>
+    <div class="mt-6 text-[10px] text-center ink-faint font-mono">
+      * First registration with a new email automatically creates an Admin with the provided PIN.
+    </div>
+  </div>
+</div>
+
+<div x-show="authenticated && !booting" x-cloak class="min-h-screen flex">
+
+  <aside class="hidden md:flex md:w-64 flex-col shrink-0 glass border-r h-screen sticky top-0 overflow-y-auto" style="border-color:var(--panel-border)">
+    <div class="px-5 py-5 flex items-center gap-2.5">
+      <img src="https://sadagaat.com:9090/api/v1/projects/6268/image" class="w-9 h-9 object-contain shrink-0" alt="Workspace Logo">
+      <div>
+        <p class="font-display font-semibold text-sm leading-none">Workspace</p>
+        <p class="font-mono text-[10px] ink-faint mt-0.5" x-text="user.subOffice || 'Central Hub'"></p>
+      </div>
+    </div>
+
+    <nav class="flex-1 px-3 space-y-1 mt-2">
+      <template x-for="item in navItems" :key="item.id">
+        <button x-show="item.id === 'office' ? isStaff : (!item.adminOnly || isAdmin)"
+                @click="activeTab = item.id"
+                class="tab-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ink-dim hover:text-white transition"
+                :class="activeTab === item.id ? 'active' : ''">
+          <i :data-lucide="item.icon" class="w-4 h-4"></i>
+          <span x-text="item.label"></span>
+          <span x-show="item.id==='tasks' && counts.tasks" class="ml-auto font-mono text-[10px] ink-faint" x-text="counts.tasks"></span>
+          <span x-show="item.id==='requests' && counts.pendingFiles" class="ml-auto font-mono text-[10px] text-amber-400 font-bold px-1.5 py-0.2 rounded bg-amber-500/10" x-text="counts.pendingFiles"></span>
+          <span x-show="item.id==='chat' && unreadChat" class="ml-auto w-2 h-2 rounded-full" style="background:var(--rose)"></span>
+        </button>
+      </template>
+    </nav>
+
+    <div class="px-3 pb-4 space-y-1.5">
+      <button @click="theme = theme==='dark' ? 'light' : 'dark'" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm ink-dim hover:text-white transition">
+        <i :data-lucide="theme==='dark' ? 'sun' : 'moon'" class="w-4 h-4"></i>
+        <span x-text="theme==='dark' ? 'Light mode' : 'Dark mode'"></span>
+      </button>
+      <button @click="logout" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/5 rounded-lg transition">
+        <i data-lucide="log-out" class="w-4 h-4"></i>
+        <span>Sign Out</span>
+      </button>
+      <div class="glass rounded-xl p-3 mt-1 flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center font-mono text-xs font-semibold shrink-0" style="background:var(--panel-border)" x-text="initials(user.name)"></div>
+        <div class="min-w-0">
+          <p class="text-xs font-medium truncate" x-text="user.name"></p>
+          <p class="text-[10px] ink-faint truncate" x-text="user.email"></p>
+        </div>
+        <span class="ml-auto badge shrink-0" :style="isAdmin ? 'background:rgba(22,163,74,.15);color:var(--accent)' : 'background:rgba(255,255,255,.08);color:var(--ink-dim)'" x-text="user.role"></span>
+      </div>
+      <p class="font-mono text-[9px] ink-faint text-center" x-text="mockMode ? '● LOCAL MOCK DB — PREVIEW DATA' : '● LIVE — SECURE API'"></p>
+    </div>
+  </aside>
+
+  <div class="md:hidden fixed bottom-0 inset-x-0 z-40 glass border-t flex justify-around py-2" style="border-color:var(--panel-border)">
+    <template x-for="item in navItems.filter(i => (i.id==='office' ? isStaff : (!i.adminOnly || isAdmin))).slice(0,6)" :key="item.id">
+      <button @click="activeTab = item.id" class="flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg" :class="activeTab===item.id ? 'text-white' : 'ink-faint'">
+        <i :data-lucide="item.icon" class="w-4 h-4"></i>
+        <span class="text-[9px]" x-text="item.label"></span>
+      </button>
+    </template>
+  </div>
+
+  <main class="flex-1 min-w-0 pb-20 md:pb-0">
+    <header class="sticky top-0 z-30 glass border-b px-4 md:px-8 py-4 flex items-center gap-4" style="border-color:var(--panel-border)">
+      <div>
+        <h1 class="font-display font-semibold text-lg leading-none" x-text="navItems.find(n=>n.id===activeTab)?.label"></h1>
+        <p class="text-xs ink-faint mt-1" x-text="todayLabel"></p>
+      </div>
+      <div class="ml-auto flex items-center gap-2 w-full max-w-xs">
+        <div class="relative w-full">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ink-faint"></i>
+          <input x-model="search" type="text" placeholder="Search parameters..."
+                 class="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-transparent glass placeholder:ink-faint">
+        </div>
+      </div>
+      <button @click="refreshAll" :disabled="refreshing" class="glass rounded-lg p-2 shrink-0" title="Sync database data">
+        <i data-lucide="refresh-cw" class="w-4 h-4" :class="refreshing ? 'animate-spin' : ''"></i>
+      </button>
+    </header>
+
+    <div class="p-4 md:p-8 max-w-6xl mx-auto">
+
+      <section x-show="activeTab==='overview'" class="fade-in space-y-6">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="glass rounded-2xl p-5">
+            <p class="text-xs ink-faint">Total tasks</p>
+            <p class="font-display text-3xl mt-1 kpi-num" x-text="metrics.totalTasks"></p>
+            <p class="text-xs mt-1" :style="metrics.overdueTasks ? 'color:var(--rose)' : 'color:var(--ink-faint)'" x-text="metrics.overdueTasks + ' overdue'"></p>
+          </div>
+          <div class="glass rounded-2xl p-5">
+            <p class="text-xs ink-faint">Completed tasks</p>
+            <p class="font-display text-3xl mt-1 kpi-num" x-text="metrics.tasksByStatus['Done']||0"></p>
+            <p class="text-xs ink-faint mt-1">of <span x-text="metrics.totalTasks"></span> total</p>
+          </div>
+          <div class="glass rounded-2xl p-5">
+            <p class="text-xs ink-faint">Income statement</p>
+            <p class="font-mono text-2xl mt-1 kpi-num" style="color:var(--accent-2)" x-text="money(metrics.income)"></p>
+          </div>
+          <div class="glass rounded-2xl p-5">
+            <p class="text-xs ink-faint">Balance sheet</p>
+            <p class="font-mono text-2xl mt-1 kpi-num" :style="metrics.balance>=0 ? 'color:var(--accent-2)' : 'color:var(--rose)'" x-text="money(metrics.balance)"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+          <div class="glass rounded-2xl p-3">
+            <p class="font-display text-[11px] font-semibold mb-1 text-center">Tasks by Status</p>
+            <div class="relative h-28 flex items-center justify-center">
+              <canvas id="chartTasks"></canvas>
+            </div>
+          </div>
+          <div class="glass rounded-2xl p-3">
+            <p class="font-display text-[11px] font-semibold mb-1 text-center">Expenses by Category</p>
+            <div class="relative h-28 flex items-center justify-center">
+              <canvas id="chartExpense"></canvas>
+            </div>
+          </div>
+          <div class="glass rounded-2xl p-3">
+            <p class="font-display text-[11px] font-semibold mb-1 text-center">Cashflow (Income vs Expense)</p>
+            <div class="relative h-28 flex items-center justify-center">
+              <canvas id="chartFinance"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-5">
+          <p class="font-display text-sm font-semibold mb-3">Recent activity logs</p>
+          <div class="space-y-2 max-h-64 overflow-y-auto scrollbar-thin">
+            <template x-for="item in recentActivity" :key="item.id">
+              <div class="flex items-center gap-3 text-sm py-1.5 border-b border-white/[0.02]">
+                <i :data-lucide="item.icon" class="w-3.5 h-3.5 shrink-0 ink-faint"></i>
+                <span class="ink-dim truncate" x-text="item.text"></span>
+                <span class="ml-auto font-mono text-[10px] ink-faint shrink-0" x-text="timeAgo(item.at)"></span>
+              </div>
+            </template>
+            <p x-show="!recentActivity.length" class="text-sm ink-faint">Nothing recorded yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='office' && isStaff" class="fade-in space-y-6">
+        <div class="glass rounded-2xl p-6 space-y-6">
+          <div class="flex items-center gap-3 border-b pb-4" style="border-color:var(--panel-border)">
+            <i data-lucide="building-2" class="w-6 h-6" style="color:var(--accent)"></i>
+            <div>
+              <h2 class="font-display font-semibold text-lg" x-text="(user.subOffice || 'Your') + ' Sub-Office Details'"></h2>
+              <p class="text-xs ink-faint">Confidential workspace operational details restricted to staff of this location.</p>
+            </div>
+          </div>
+          
+          <template x-if="officeDetails">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="glass rounded-xl p-4 space-y-2">
+                <p class="text-xs ink-faint">Operational Address</p>
+                <p class="text-sm font-semibold ink" x-text="officeDetails.location"></p>
+              </div>
+              <div class="glass rounded-xl p-4 space-y-2">
+                <p class="text-xs ink-faint">Internal Secured Network</p>
+                <p class="text-sm font-mono font-semibold" style="color:var(--accent)" x-text="'SSID: ' + officeDetails.wifiSSID"></p>
+                <p class="text-xs font-mono ink-dim" x-text="'WPA3: ' + officeDetails.wifiPass"></p>
+              </div>
+              <div class="glass rounded-xl p-4 space-y-2">
+                <p class="text-xs ink-faint">Office Dispatch Hotline</p>
+                <p class="text-sm font-semibold ink" x-text="officeDetails.phone"></p>
+              </div>
+              <div class="glass rounded-xl p-4 space-y-2">
+                <p class="text-xs ink-faint">Operational Verification Status</p>
+                <div>
+                  <span class="badge" style="background:rgba(22,163,74,.15);color:var(--accent)" x-text="officeDetails.status"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <template x-if="!officeDetails">
+             <p class="text-sm ink-dim">No specific data configured for your assigned sub-office yet.</p>
+          </template>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='tasks'" class="fade-in space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <select x-model="taskFilter.status" class="glass rounded-lg text-sm px-3 py-2 bg-transparent text-white">
+            <option class="bg-[#0f131a]" value="">All statuses</option>
+            <option class="bg-[#0f131a]">To Do</option>
+            <option class="bg-[#0f131a]">In Progress</option>
+            <option class="bg-[#0f131a]">Done</option>
+          </select>
+          <select x-model="taskFilter.priority" class="glass rounded-lg text-sm px-3 py-2 bg-transparent text-white">
+            <option class="bg-[#0f131a]" value="">All priorities</option>
+            <option class="bg-[#0f131a]">Low</option>
+            <option class="bg-[#0f131a]">Medium</option>
+            <option class="bg-[#0f131a]">High</option>
+          </select>
+          <button @click="openTaskModal()" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-1.5" style="background:var(--accent)">
+            <i data-lucide="plus" class="w-4 h-4"></i> New task
+          </button>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4">
+          <template x-for="col in ['To Do','In Progress','Done']" :key="col">
+            <div class="glass rounded-2xl p-3 min-h-[120px]">
+              <p class="font-display text-xs font-semibold ink-dim mb-3 px-1" x-text="col + ' · ' + filteredTasks.filter(t=>t.status===col).length"></p>
+              <div class="space-y-2">
+                <template x-for="t in filteredTasks.filter(t=>t.status===col)" :key="t.id">
+                  <div class="rounded-xl p-3 cursor-pointer hover:opacity-90 transition" style="background:var(--bg-2);border:1px solid var(--panel-border)" @click="openTaskModal(t)">
+                    <div class="flex items-start justify-between gap-2">
+                      <p class="text-sm font-medium leading-snug" x-text="t.title"></p>
+                      <span class="badge shrink-0" :style="prioStyle(t.priority)" x-text="t.priority"></span>
+                    </div>
+                    <p class="text-xs ink-faint mt-1.5 line-clamp-2" x-text="t.description"></p>
+                    <div class="flex items-center gap-2 mt-2.5 text-[11px] ink-faint">
+                      <i data-lucide="user" class="w-3 h-3"></i><span x-text="t.assignedTo"></span>
+                      <template x-if="t.dueDate"><span class="ml-auto font-mono" :style="isOverdue(t) ? 'color:var(--rose)' : ''" x-text="fmtDate(t.dueDate)"></span></template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='assets'" class="fade-in space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="font-display font-semibold text-lg">Hardware & Software Assets</h2>
+            <p class="text-xs ink-faint mt-0.5">Track, assign, and import workspace equipment parameters dynamically.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button @click="downloadAssetCsvTemplate()" class="px-4 py-2 rounded-lg text-sm font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 flex items-center gap-1.5 transition" title="Download Excel CSV Header Template Schema">
+              <i data-lucide="download" class="w-4 h-4"></i> Download template CSV
+            </button>
+            <input type="file" id="assetCsvImport" accept=".csv" class="hidden" @change="handleCsvImport($event)">
+            <button @click="document.getElementById('assetCsvImport').click()" class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 flex items-center gap-1.5" title="Import Asset spreadsheet data (.csv)">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Import CSV / Excel
+            </button>
+            <button @click="openAssetModal()" class="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-1.5" style="background:var(--accent-2)">
+              <i data-lucide="plus" class="w-4 h-4"></i> Add Asset
+            </button>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left ink-faint text-xs border-b" style="border-color:var(--panel-border)">
+                <th class="px-4 py-3 font-normal">No.</th>
+                <th class="px-4 py-3 font-normal">Id</th>
+                <th class="px-4 py-3 font-normal">Serial</th>
+                <th class="px-4 py-3 font-normal">Asset Name</th>
+                <th class="px-4 py-3 font-normal">Center</th>
+                <th class="px-4 py-3 font-normal">Assign To</th>
+                <th class="px-4 py-3 font-normal">Assign By</th>
+                <th class="px-4 py-3 font-normal">Date</th>
+                <th class="px-4 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(a, idx) in filteredAssets" :key="a.id">
+                <tr class="border-b hover:bg-white/[.02] cursor-pointer" style="border-color:var(--panel-border)" @click="openAssetModal(a)">
+                  <td class="px-4 py-3 font-mono text-[11px] ink-faint" x-text="idx+1"></td>
+                  <td class="px-4 py-3 font-mono text-[10px] text-zinc-500 truncate max-w-[80px]" :title="a.id" x-text="a.id || '—'"></td>
+                  <td class="px-4 py-3 font-mono text-xs text-cyan-400 font-semibold" x-text="a.serial || '—'"></td>
+                  <td class="px-4 py-3 font-medium ink" x-text="a.name"></td>
+                  <td class="px-4 py-3 text-xs" x-text="a.center || '—'"></td>
+                  <td class="px-4 py-3 text-xs font-mono ink-dim" x-text="a.assignedTo || '—'"></td>
+                  <td class="px-4 py-3 text-xs font-mono ink-faint" x-text="a.assignedBy || '—'"></td>
+                  <td class="px-4 py-3 text-xs font-mono ink-faint" x-text="fmtDate(a.date)"></td>
+                  <td class="px-4 py-3 text-right" @click.stop>
+                    <button @click="deleteAsset(a.id)" class="p-1 rounded hover:bg-rose-500/10 text-rose-400" title="Delete Asset">
+                      <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="!assets.length">
+                <td colspan="9" class="px-4 py-12 text-center ink-faint text-sm">No recorded assets found. Click Add or Import to start tracking.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='calendar'" class="fade-in space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button @click="prevMonth" class="glass rounded-lg p-2"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+            <span class="font-display font-semibold text-lg text-center min-w-[140px]" x-text="calendarMonthName"></span>
+            <button @click="nextMonth" class="glass rounded-lg p-2"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+          </div>
+          <button @click="openEventModal()" class="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-1.5" style="background:var(--accent-2)">
+            <i data-lucide="plus" class="w-4 h-4"></i> Add Event / Meeting
+          </button>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1.5 text-center text-xs font-semibold ink-dim py-1 border-b border-white/5">
+          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        </div>
+
+        <div class="grid grid-cols-7 gap-1.5">
+          <template x-for="day in calendarDays" :key="day.dateStr">
+            <div class="glass rounded-xl p-2 min-h-[95px] flex flex-col justify-between transition hover:bg-white/[0.01]"
+                 :class="day.isCurrentMonth ? '' : 'opacity-40'">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-mono font-semibold" :class="day.dateStr === new Date().toISOString().slice(0,10) ? 'text-rose-400 bg-rose-500/15 px-1.5 py-0.5 rounded-md font-bold' : ''" x-text="day.date.getDate()"></span>
+                <button @click="openEventModal(day.dateStr)" class="opacity-0 hover:opacity-100 p-0.5 rounded transition text-emerald-400"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
+              </div>
+
+              <div class="mt-1 space-y-1 overflow-y-auto scrollbar-none max-h-[60px]">
+                <template x-for="t in day.tasks" :key="t.id">
+                  <div class="text-[9px] px-1 py-0.5 rounded truncate font-semibold border border-sky-500/10" style="background:rgba(56,189,248,.1);color:var(--accent-2)" :title="'Task: ' + t.title" x-text="'T: ' + t.title"></div>
+                </template>
+                <template x-for="e in day.events" :key="e.id">
+                  <div class="text-[9px] px-1 py-0.5 rounded truncate font-semibold border border-purple-500/10 flex items-center justify-between" style="background:rgba(167,139,250,.1);color:var(--violet)" :title="e.title + ' (' + e.time + ')'">
+                    <span x-text="e.title"></span>
+                    <button @click.stop="deleteEvent(e.id)" class="hover:text-rose-400 text-[10px] ml-1 font-bold">×</button>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='planner'" class="fade-in space-y-6">
+        <div class="glass rounded-2xl p-5">
+          <p class="font-display text-sm font-semibold mb-3">Weekly Objectives</p>
+          <div class="flex gap-2">
+            <input x-model="plannerObjectiveDraft" @keydown.enter="addWeeklyObjective" placeholder="Define critical priority focus targets..." class="flex-1 glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+            <button @click="addWeeklyObjective" class="px-4 rounded-lg text-white font-semibold text-sm flex items-center gap-1.5" style="background:var(--accent)"><i data-lucide="plus" class="w-4 h-4"></i> Add Objective</button>
+          </div>
+          <div class="mt-3 space-y-2">
+            <template x-for="(obj, index) in weeklyObjectives" :key="index">
+              <div class="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                <span class="text-sm" x-text="obj"></span>
+                <button @click="removeWeeklyObjective(index)" class="text-rose-400 hover:text-rose-500 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+              </div>
+            </template>
+            <template x-if="!weeklyObjectives.length">
+              <p class="text-xs ink-faint">No targets defined for this week yet.</p>
+            </template>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-7 gap-3">
+          <template x-for="day in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']" :key="day">
+            <div class="glass rounded-xl p-3 flex flex-col justify-between min-h-[220px]">
+              <div>
+                <p class="font-display text-xs font-bold ink-dim border-b pb-1.5 mb-2 flex justify-between" style="border-color:var(--panel-border)">
+                  <span x-text="day"></span>
+                  <span class="text-[10px] opacity-60 font-mono" x-text="(plannerDays[day] || []).length"></span>
+                </p>
+                <div class="space-y-1.5 max-h-[160px] overflow-y-auto scrollbar-thin">
+                  <template x-for="p in (plannerDays[day] || [])" :key="p.id">
+                    <div class="bg-white/5 border border-white/5 rounded p-2 text-xs flex justify-between items-start">
+                      <span class="truncate pr-1 leading-snug" x-text="p.text" :title="p.text"></span>
+                      <button @click="removePlannerItem(day, p.id)" class="text-rose-400 opacity-60 hover:opacity-100"><i data-lucide="x" class="w-3 h-3"></i></button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <div class="mt-3">
+                <input type="text" placeholder="+ Plan"
+                       @keydown.enter="addPlannerItem(day, $event.target.value); $event.target.value = ''"
+                       class="w-full text-xs bg-transparent glass rounded px-2 py-1.5 border border-dashed border-white/10 hover:border-white/25 transition text-white">
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='budgets'" class="fade-in space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <select x-model="budgetFilter.type" class="glass rounded-lg text-sm px-3 py-2 bg-transparent text-white">
+            <option class="bg-[#0f131a]" value="">All entries</option>
+            <option class="bg-[#0f131a]">Expense</option>
+            <option class="bg-[#0f131a]">Income</option>
+          </select>
+          <button @click="openBudgetModal()" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-1.5" style="background:var(--accent-2)">
+            <i data-lucide="plus" class="w-4 h-4"></i> New entry
+          </button>
+        </div>
+
+        <div class="glass rounded-2xl overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left ink-faint text-xs border-b" style="border-color:var(--panel-border)">
+                <th class="px-4 py-3 font-normal">Category</th>
+                <th class="px-4 py-3 font-normal hidden sm:table-cell">Description</th>
+                <th class="px-4 py-3 font-normal">Date</th>
+                <th class="px-4 py-3 font-normal">Logged By (Staff Email)</th>
+                <th class="px-4 py-3 font-normal text-right">Amount</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="b in filteredBudgets" :key="b.id">
+                <tr class="border-b hover:bg-white/[.02] cursor-pointer" style="border-color:var(--panel-border)" @click="openBudgetModal(b)">
+                  <td class="px-4 py-3"><span class="badge" :style="b.type==='Income' ? 'background:rgba(22,163,74,.15);color:var(--accent)' : 'background:rgba(251,113,133,.15);color:var(--rose)'" x-text="b.category"></span></td>
+                  <td class="px-4 py-3 ink-dim hidden sm:table-cell truncate max-w-[200px]" x-text="b.description"></td>
+                  <td class="px-4 py-3 font-mono text-xs ink-faint" x-text="fmtDate(b.date)"></td>
+                  <td class="px-4 py-3 text-xs font-mono text-cyan-400" x-text="b.createdBy || '—'"></td>
+                  <td class="px-4 py-3 text-right font-mono" :style="b.type==='Income' ? 'color:var(--accent-2)' : 'color:var(--rose)'" x-text="(b.type==='Income'?'+':'-') + money(b.amount)"></td>
+                  <td class="px-4 py-3 text-right" @click.stop><i data-lucide="trash-2" class="w-3.5 h-3.5 ink-faint hover:text-red-400 cursor-pointer" @click="deleteBudget(b.id)"></i></td>
+                </tr>
+              </template>
+              <tr x-show="!filteredBudgets.length"><td colspan="6" class="px-4 py-8 text-center ink-faint text-sm">No transaction items found.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='requests'" class="fade-in space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <div class="lg:col-span-1 space-y-4">
+            
+            <div class="glass rounded-2xl p-5 space-y-4" style="background:var(--bg-2)">
+              <div class="flex items-center gap-2 border-b pb-3" style="border-color:var(--panel-border)">
+                <i data-lucide="send" class="w-5 h-5 text-emerald-400"></i>
+                <h3 class="font-display font-semibold text-sm">Instant File Share</h3>
+              </div>
+              <p class="text-xs ink-dim leading-relaxed">No formal requests needed! Paste a direct URL or quick-select from your Google Drive to share instantly with the workspace.</p>
+              
+              <div class="space-y-3.5">
+                <div>
+                  <label class="text-[11px] ink-faint block mb-1">File Title</label>
+                  <input x-model="quickShare.title" placeholder="e.g. Q3 Sadagaat Financials" class="w-full glass rounded-lg px-3 py-2 text-xs bg-transparent text-white focus:border-cyan-400">
+                </div>
+                <div>
+                  <label class="text-[11px] ink-faint block mb-1">Comments / Description</label>
+                  <textarea x-model="quickShare.description" placeholder="Add custom comments..." rows="2" class="w-full glass rounded-lg px-3 py-2 text-xs bg-transparent text-white focus:border-cyan-400"></textarea>
+                </div>
+                
+                <div>
+                  <label class="text-[11px] ink-faint block mb-1">Document Link / Drive Picker</label>
+                  <div class="flex gap-2">
+                    <input x-model="quickShare.fileUrl" placeholder="https://drive.google.com/..." class="flex-1 glass rounded-lg px-3 py-2 text-xs bg-transparent font-mono text-cyan-300 focus:border-cyan-400">
+                    <button @click="openQuickShareDrivePicker" class="px-3 py-2 rounded-lg text-xs font-semibold bg-zinc-800 text-cyan-300 border border-cyan-500/20 hover:bg-zinc-700 transition flex items-center gap-1 shrink-0">
+                      <i data-lucide="folder-open" class="w-3.5 h-3.5"></i> Drive
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label class="text-[11px] ink-faint block mb-1">Display Filename</label>
+                  <input x-model="quickShare.fileName" placeholder="e.g. Q3_Sadagaat_Audit.xlsx" class="w-full glass rounded-lg px-3 py-2 text-xs bg-transparent text-white focus:border-cyan-400">
+                </div>
+
+                <button @click="postQuickShare" :disabled="!quickShare.title || !quickShare.fileUrl" class="w-full py-2.5 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/20">
+                  <i data-lucide="share" class="w-3.5 h-3.5"></i> Share with Workspace
+                </button>
+              </div>
+            </div>
+
+            <div class="glass rounded-2xl p-5 space-y-3">
+              <h3 class="font-display font-semibold text-xs ink-dim uppercase tracking-wider">Formal Requested Deliverables</h3>
+              <div class="flex glass rounded-lg p-0.5">
+                <button @click="fileTab = 'incoming'" class="flex-1 py-1.5 rounded-md text-xs transition" :class="fileTab === 'incoming' ? 'bg-white/10 text-white font-medium' : 'ink-dim hover:text-white'">
+                  Incoming For Me (<span x-text="incomingRequests.length"></span>)
+                </button>
+                <button @click="fileTab = 'outgoing'" class="flex-1 py-1.5 rounded-md text-xs transition" :class="fileTab === 'outgoing' ? 'bg-white/10 text-white font-medium' : 'ink-dim hover:text-white'">
+                  Outgoing By Me (<span x-text="outgoingRequests.length"></span>)
+                </button>
+              </div>
+              <button @click="openFileRequestModal()" class="w-full py-2 rounded-lg text-xs font-semibold text-white border border-dashed border-white/20 hover:bg-white/5 transition flex items-center justify-center gap-1.5">
+                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Request Formal Document
+              </button>
+            </div>
+
+          </div>
+
+          <div class="lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between border-b pb-2" style="border-color:var(--panel-border)">
+              <div class="flex items-center gap-2">
+                <i data-lucide="message-square-dashed" class="w-5 h-5 text-emerald-400"></i>
+                <h3 class="font-display font-bold text-base">Workspace File Chat Stream</h3>
+              </div>
+              <div class="text-[11px] ink-faint font-mono">
+                Active Shared files: <span class="text-white font-bold" x-text="fileChatStream.length"></span>
+              </div>
+            </div>
+
+            <div class="space-y-3.5 max-h-[70vh] overflow-y-auto pr-2 scrollbar-thin">
+              <template x-for="item in fileChatStream" :key="item.id">
+                <div class="glass rounded-2xl p-4 space-y-3 border-l-4 transition hover:bg-white/[0.01]" 
+                     :style="String(item.uploadedBy || '').toLowerCase() === String(user.email || '').toLowerCase() ? 'border-color:var(--accent)' : 'border-color:var(--accent-2)'">
+                  
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <div class="w-7 h-7 rounded-full flex items-center justify-center font-mono text-[10px] text-white shrink-0 font-bold" 
+                           :style="String(item.uploadedBy || '').toLowerCase() === String(user.email || '').toLowerCase() ? 'background:rgba(22,163,74,.2)' : 'background:rgba(59,130,246,.2)'"
+                           x-text="initials(item.uploadedBy || item.requestedBy)"></div>
+                      <div class="min-w-0">
+                        <p class="text-xs font-bold text-white truncate" x-text="item.uploadedBy || item.requestedBy"></p>
+                        <p class="text-[10px] ink-faint font-mono leading-none mt-0.5" x-text="item.serial ? ('Serial: ' + item.serial) : 'Direct Instant Share'"></p>
+                      </div>
+                    </div>
+                    
+                    <div class="text-right shrink-0">
+                      <p class="text-[10px] font-mono text-cyan-400 font-semibold" x-text="fmtDateTime(item.createdAt)"></p>
+                      <p class="text-[9px] ink-faint mt-0.5" x-text="timeAgo(item.createdAt)"></p>
+                    </div>
+                  </div>
+
+                  <div class="bg-black/15 rounded-xl p-3.5 space-y-2 border border-white/[0.02]">
+                    <h4 class="text-sm font-semibold text-white leading-snug" x-text="item.title"></h4>
+                    <template x-if="item.description">
+                      <p class="text-xs ink-dim whitespace-pre-line leading-relaxed" x-text="item.description"></p>
+                    </template>
+                    
+                    <div class="flex items-center justify-between gap-4 pt-2 border-t border-white/[0.03] flex-wrap">
+                      <a :href="item.fileUrl" target="_blank" class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:underline bg-emerald-500/10 px-3 py-1.5 rounded-lg transition">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span class="truncate max-w-[200px]" x-text="item.fileName || 'View Document Link'"></span>
+                      </a>
+                      
+                      <template x-if="item.serial && item.serial.startsWith('REQ-')">
+                        <span class="badge" style="background:rgba(245,165,36,.15);color:var(--amber)" x-text="'Deliverable check-in: ' + item.serial"></span>
+                      </template>
+                    </div>
+                  </div>
+                  
+                </div>
+              </template>
+
+              <template x-if="!fileChatStream.length">
+                <div class="glass rounded-2xl p-12 text-center space-y-2">
+                  <i data-lucide="file-warning" class="w-8 h-8 mx-auto text-zinc-500"></i>
+                  <p class="text-sm ink-dim">No shared documents found in the database pipeline.</p>
+                  <p class="text-xs ink-faint">Drop a quick attachment link above to start the workspace stream!</p>
+                </div>
+              </template>
+            </div>
+
+            <div class="border-t pt-4 space-y-3" style="border-color:var(--panel-border)" x-show="counts.pendingFiles > 0">
+              <h4 class="font-display text-xs font-semibold ink-dim uppercase tracking-wider">Your Pending Deliverables requests</h4>
+              <div class="glass rounded-xl overflow-hidden">
+                <table class="w-full text-xs">
+                  <tbody>
+                    <template x-for="r in incomingRequests.filter(x => x.status === 'Pending')" :key="r.id">
+                      <tr class="border-b hover:bg-white/5" style="border-color:var(--panel-border)">
+                        <td class="px-3 py-2 font-bold" x-text="r.title"></td>
+                        <td class="px-3 py-2 text-right">
+                          <button @click="openFulfillModal(r)" class="px-2 py-1 rounded bg-cyan-600 text-white font-semibold">Fulfill / Upload</button>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <section x-show="activeTab==='chat'" class="fade-in">
+        <div class="glass rounded-2xl flex flex-col h-[65vh]">
+          <div class="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3" x-ref="chatScroll">
+            <template x-for="m in chat" :key="m.id">
+              <div class="flex gap-2.5" :class="m.email===user.email ? 'flex-row-reverse' : ''">
+                <div class="w-7 h-7 rounded-full flex items-center justify-center font-mono text-[10px] shrink-0" style="background:var(--panel-border)" x-text="initials(m.name)"></div>
+                <div class="max-w-[75%]">
+                  <div class="rounded-xl px-3 py-2 text-sm" :style="m.email===user.email ? 'background:var(--accent);color:#ffffff' : 'background:var(--bg-2);border:1px solid var(--panel-border)'" x-text="m.message"></div>
+                  <p class="text-[10px] ink-faint mt-1 px-1" :class="m.email===user.email ? 'text-right' : ''" x-text="m.name + ' · ' + timeAgo(m.createdAt)"></p>
+                </div>
+              </div>
+            </template>
+            <p x-show="!chat.length" class="text-sm ink-faint text-center py-8">No messages yet. Send a message to start conversing.</p>
+          </div>
+          <form @submit.prevent="sendChat" class="p-3 border-t flex gap-2" style="border-color:var(--panel-border)">
+            <input x-model="chatDraft" type="text" placeholder="Message the team..." class="flex-1 glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+            <button type="submit" class="px-4 rounded-lg text-white" style="background:var(--accent-2)"><i data-lucide="send" class="w-4 h-4"></i></button>
+          </form>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='users' && isAdmin" class="fade-in space-y-4">
+        <form @submit.prevent="addUser" class="glass rounded-2xl p-4 flex flex-wrap gap-2 items-end">
+          <div>
+            <label class="text-xs ink-faint block mb-1">Email</label>
+            <input x-model="newUser.email" type="email" required placeholder="name@company.com" class="glass rounded-lg px-3 py-2 text-sm bg-transparent w-48 text-white">
+          </div>
+          <div>
+            <label class="text-xs ink-faint block mb-1">Name</label>
+            <input x-model="newUser.name" type="text" placeholder="Optional" class="glass rounded-lg px-3 py-2 text-sm bg-transparent w-40 text-white">
+          </div>
+          <div>
+            <label class="text-xs ink-faint block mb-1">Role</label>
+            <select x-model="newUser.role" class="glass rounded-lg px-3 py-2 text-sm bg-transparent w-32 text-white">
+              <option class="bg-slate-900" value="Staff">Staff</option>
+              <option class="bg-slate-900" value="Admin">Admin</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs ink-faint block mb-1">Sub-Office</label>
+            <input x-model="newUser.subOffice" type="text" placeholder="e.g. Omdurman" class="glass rounded-lg px-3 py-2 text-sm bg-transparent w-40 text-white">
+          </div>
+          <div>
+            <label class="text-xs ink-faint block mb-1">PIN</label>
+            <input x-model="newUser.pin" type="text" required placeholder="Security PIN" class="glass rounded-lg px-3 py-2 text-sm bg-transparent w-36 text-white">
+          </div>
+          <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 transition">Authorize user</button>
+        </form>
+
+        <div class="glass rounded-2xl overflow-hidden">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left ink-faint text-xs border-b" style="border-color:var(--panel-border)">
+              <th class="px-4 py-3 font-normal">User</th><th class="px-4 py-3 font-normal">Sub-Office</th><th class="px-4 py-3 font-normal">Role</th>
+              <th class="px-4 py-3 font-normal">Status</th><th class="px-4 py-3 font-normal">Last seen</th><th></th>
+            </tr></thead>
+            <tbody>
+              <template x-for="u in users" :key="u.email">
+                <tr class="border-b" style="border-color:var(--panel-border)">
+                  <td class="px-4 py-3"><p class="font-medium" x-text="u.name"></p><p class="text-xs ink-faint" x-text="u.email"></p></td>
+                  <td class="px-4 py-3"><p class="text-xs ink-faint" x-text="u.subOffice || '—'"></p></td>
+                  <td class="px-4 py-3">
+                    <select :value="u.role" @change="updateUserRole(u.email, $event.target.value)" class="glass rounded-lg px-2 py-1 text-xs bg-transparent text-white">
+                      <option class="bg-slate-900" value="Staff">Staff</option>
+                      <option class="bg-slate-900" value="Admin">Admin</option>
+                    </select>
+                  </td>
+                  <td class="px-4 py-3">
+                    <button @click="updateUserStatus(u.email, u.status==='Active' ? 'Pending' : 'Active')" class="badge" :style="u.status==='Active' ? 'background:rgba(22,163,74,.15);color:var(--accent)' : 'background:rgba(245,165,36,.15);color:var(--amber)'" x-text="u.status"></button>
+                  </td>
+                  <td class="px-4 py-3 font-mono text-xs ink-faint" x-text="u.lastSeen ? timeAgo(u.lastSeen) : '—'"></td >
+                  <td class="px-4 py-3 text-right">
+                    <button @click="removeUser(u.email)" class="text-rose-400 hover:text-rose-500">
+                      <i data-lucide="user-x" class="w-4 h-4 cursor-pointer"></i>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section x-show="activeTab==='danger' && isAdmin" class="fade-in">
+        <div class="rounded-2xl p-6" style="border:1px solid rgba(251,113,133,.35);background:rgba(251,113,133,.05)">
+          <div class="flex items-center gap-2 mb-2"><i data-lucide="triangle-alert" class="w-5 h-5" style="color:var(--rose)"></i><p class="font-display font-semibold" style="color:var(--rose)">Danger zone</p></div>
+          <p class="text-sm ink-dim mb-4">This permanently clears specified tables from the connected database. Authorized staff user records are unaffected.</p>
+          <div class="flex flex-wrap gap-2 mb-4">
+            <select x-model="resetScope" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+              <option class="bg-slate-900" value="Tasks">Tasks only</option>
+              <option class="bg-slate-900" value="Budgets">Budgets only</option>
+              <option class="bg-slate-900" value="Chat">Chat only</option>
+              <option class="bg-slate-900" value="FileRequests">Requests only</option>
+              <option class="bg-slate-900" value="Assets">Assets only</option>
+              <option class="bg-slate-900" value="all">Everything (Except Users)</option>
+            </select>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input x-model="resetConfirm" type="text" placeholder='Type "RESET" to confirm' class="glass rounded-lg px-3 py-2 text-sm bg-transparent w-56 font-mono font-medium text-rose-400">
+            <button @click="resetDatabase" :disabled="resetConfirm!=='RESET'" class="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40" style="background:var(--rose);color:#1a0508">Wipe selected data</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============================= EVENT MODAL ============================= -->
+<div x-show="eventModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.55)" @click.self="eventModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-md p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-4">
+      <p class="font-display font-semibold" x-text="eventModal.data.id ? 'Edit Event/Meeting' : 'Create Event / Meeting'"></p>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="eventModal.open=false"></i>
+    </div>
+    <div class="space-y-3">
+      <input x-model="eventModal.data.title" placeholder="Meeting description" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      <div class="grid grid-cols-2 gap-2">
+        <input x-model="eventModal.data.date" type="date" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+        <input x-model="eventModal.data.time" type="time" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+      <select x-model="eventModal.data.type" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+        <option class="bg-slate-900" value="Meeting">Meeting 👥</option>
+        <option class="bg-slate-900" value="Event">Event 🎉</option>
+        <option class="bg-slate-900" value="Deadline">Deadline ⏱️</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2 mt-5">
+      <button @click="saveEvent" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white" style="background:var(--accent-2)">Schedule Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= TASK MODAL ============================= -->
+<div x-show="taskModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.55)" @click.self="taskModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-lg p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-4">
+      <p class="font-display font-semibold" x-text="taskModal.data.id ? 'Edit task' : 'New task'"></p>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="taskModal.open=false"></i>
+    </div>
+    <div class="space-y-3">
+      <input x-model="taskModal.data.title" placeholder="Task summary" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      <textarea x-model="taskModal.data.description" placeholder="Expanded guidelines..." rows="2" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white"></textarea>
+      <div class="grid grid-cols-2 gap-2">
+        <select x-model="taskModal.data.status" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+          <option class="bg-slate-900">To Do</option>
+          <option class="bg-slate-900">In Progress</option>
+          <option class="bg-slate-900">Done</option>
+        </select>
+        <select x-model="taskModal.data.priority" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+          <option class="bg-slate-900">Low</option>
+          <option class="bg-slate-900">Medium</option>
+          <option class="bg-slate-900">High</option>
+        </select>
+        <input x-model="taskModal.data.assignedTo" placeholder="Assigned to email" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+        <input x-model="taskModal.data.dueDate" type="date" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-5">
+      <button x-show="taskModal.data.id" @click="deleteTask(taskModal.data.id)" class="px-3 py-2 rounded-lg text-sm text-rose-400">Delete</button>
+      <button @click="saveTask" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700">Save task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= BUDGET MODAL ============================= -->
+<div x-show="budgetModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.55)" @click.self="budgetModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-md p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-4">
+      <p class="font-display font-semibold" x-text="budgetModal.data.id ? 'Edit entry' : 'New budget entry'"></p>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="budgetModal.open=false"></i>
+    </div>
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-2">
+        <select x-model="budgetModal.data.type" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+          <option class="bg-slate-900">Expense</option>
+          <option class="bg-slate-900">Income</option>
+        </select>
+        <input x-model="budgetModal.data.date" type="date" class="glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+      <input x-model="budgetModal.data.category" placeholder="Category (e.g. Server hosting)" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      <input x-model="budgetModal.data.description" placeholder="Description details" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      <input x-model.number="budgetModal.data.amount" type="number" step="0.01" placeholder="Amount" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent font-mono text-white">
+      
+      <template x-if="budgetModal.data.createdBy">
+        <div class="text-[11px] text-cyan-400 font-mono pt-1">
+          Authorized Initiator: <span x-text="budgetModal.data.createdBy"></span>
+        </div>
+      </template>
+    </div>
+    <div class="flex items-center gap-2 mt-5">
+      <button x-show="budgetModal.data.id" @click="deleteBudget(budgetModal.data.id); budgetModal.open=false" class="px-3 py-2 rounded-lg text-sm text-rose-400">Delete</button>
+      <button @click="saveBudget" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Save entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= ASSET MODAL ============================= -->
+<div x-show="assetModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.55)" @click.self="assetModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-md p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-4">
+      <p class="font-display font-semibold" x-text="assetModal.data.id ? 'Edit Asset Parameters' : 'Register New Asset'"></p>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="assetModal.open=false"></i>
+    </div>
+    <div class="space-y-3">
+      <template x-if="assetModal.data.id">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] ink-faint uppercase block mb-1">Asset ID</label>
+            <input :value="assetModal.data.id" readonly class="w-full glass rounded-lg px-3 py-2 text-xs bg-black/30 text-zinc-500 font-mono">
+          </div>
+          <div>
+            <label class="text-[10px] ink-faint uppercase block mb-1">Serial Number</label>
+            <input :value="assetModal.data.serial" readonly class="w-full glass rounded-lg px-3 py-2 text-xs bg-black/30 text-cyan-500/80 font-mono">
+          </div>
+        </div>
+      </template>
+      <div>
+        <label class="text-[10px] ink-faint uppercase block mb-1">Asset Name</label>
+        <input x-model="assetModal.data.name" placeholder="Asset Identifier Name" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+      <div>
+        <label class="text-[10px] ink-faint uppercase block mb-1">Center Location</label>
+        <input x-model="assetModal.data.center" placeholder="Center Location (e.g. Omdurman Office)" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+      <div>
+        <label class="text-[10px] ink-faint uppercase block mb-1">Assigned To (User Email)</label>
+        <input x-model="assetModal.data.assignedTo" placeholder="Assigned User Email" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[10px] ink-faint uppercase block mb-1">Assigned By</label>
+          <input x-model="assetModal.data.assignedBy" placeholder="Assigned By Email" class="w-full glass rounded-lg px-3 py-2 text-xs bg-transparent text-zinc-400 font-mono">
+        </div>
+        <div>
+          <label class="text-[10px] ink-faint uppercase block mb-1">Allocation Date</label>
+          <input x-model="assetModal.data.date" type="date" class="w-full glass rounded-lg px-3 py-2 text-xs bg-transparent text-white">
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-5">
+      <button @click="saveAsset" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700">Save Asset</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= NEW FORMAL REQUEST MODAL ============================= -->
+<div x-show="fileRequestModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.55)" @click.self="fileRequestModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-md p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-4">
+      <p class="font-display font-semibold">New Formal Request</p>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="fileRequestModal.open=false"></i>
+    </div>
+    <div class="space-y-3.5">
+      <div>
+        <label class="text-xs ink-faint block mb-1">Target User (Who needs to provide?)</label>
+        <select x-model="fileRequestModal.data.requestedFrom" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+          <option value="" class="bg-slate-900">Choose a team member...</option>
+          <template x-for="u in users.filter(x => String(x.email).toLowerCase() !== String(user.email).toLowerCase())" :key="u.email">
+            <option :value="u.email" class="bg-slate-900" x-text="u.name + ' (' + u.email + ')'"></option>
+          </template>
+        </select>
+        <template x-if="!users.filter(x => String(x.email).toLowerCase() !== String(user.email).toLowerCase()).length">
+          <input x-model="fileRequestModal.data.requestedFrom" placeholder="Enter target user email manually..." class="w-full mt-1.5 glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+        </template>
+      </div>
+      <div>
+        <label class="text-xs ink-faint block mb-1">Request Title / File Parameter Needed</label>
+        <input x-model="fileRequestModal.data.title" placeholder="e.g. Q3 Financial Audit Spreadsheet" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+      <div>
+        <label class="text-xs ink-faint block mb-1">Instructions (Optional)</label>
+        <textarea x-model="fileRequestModal.data.description" placeholder="Detail explicit formats..." rows="2" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white"></textarea>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-6">
+      <button @click="saveFileRequest" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= DRIVE & URL FULFILL INTEGRATION MODAL ============================= -->
+<div x-show="fulfillModal.open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,.55)" @click.self="fulfillModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-lg p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <p class="font-display font-semibold">Deliver / Attach Requested File</p>
+        <p class="text-xs ink-faint mt-0.5" x-text="'Request Title: ' + fulfillModal.requestTitle"></p>
+      </div>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="fulfillModal.open=false"></i>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <p class="text-xs font-semibold text-cyan-400 mb-2">Option A: Quick-Select from Google Drive:</p>
+        <div class="glass rounded-xl p-2 max-h-40 overflow-y-auto space-y-1.5 scrollbar-thin">
+          <template x-if="fulfillModal.loadingDrive">
+            <div class="text-center py-4">
+              <div class="w-6 h-6 mx-auto mb-2 rounded-lg border-2 animate-spin" style="border-color:var(--panel-border);border-top-color:var(--accent-2)"></div>
+              <span class="text-xs ink-faint">Loading Google Drive index...</span>
+            </div>
+          </template>
+          <template x-if="!fulfillModal.loadingDrive && fulfillModal.driveFiles.length">
+            <div>
+              <template x-for="f in fulfillModal.driveFiles" :key="f.id">
+                <button @click="selectDriveFile(f)" 
+                        class="w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition border border-transparent"
+                        :class="fulfillModal.selectedFileId === f.id ? 'bg-cyan-500/10 text-cyan-300 font-semibold border-cyan-500/40' : 'hover:bg-white/5 ink-dim'">
+                  <span class="truncate pr-4" x-text="f.name"></span>
+                  <span class="font-mono text-[9px] tracking-wider text-cyan-400 shrink-0" x-text="f.mimeType.split('/').pop().toUpperCase()"></span>
+                </button>
+              </template>
+            </div>
+          </template>
+          <template x-if="!fulfillModal.loadingDrive && !fulfillModal.driveFiles.length">
+            <p class="text-center text-xs py-4 ink-faint">No recent Drive files index detected.</p>
+          </template>
+        </div>
+      </div>
+
+      <div class="border-t pt-4" style="border-color:var(--panel-border)">
+        <label class="text-xs font-semibold text-cyan-400 block mb-1.5">Option B: Deliver via Manual HTTP / HTTPS URL Link</label>
+        <input x-model="fulfillModal.selectedFileUrl" placeholder="https://example.com/file.pdf share URL link" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent font-mono text-xs text-cyan-300">
+      </div>
+      <div>
+        <label class="text-xs font-semibold ink-dim block mb-1">Display Label Name</label>
+        <input x-model="fulfillModal.selectedFileName" placeholder="e.g. Exported Audit Spreadsheet.xlsx" class="w-full glass rounded-lg px-3 py-2 text-sm bg-transparent text-white">
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-6">
+      <button @click="fulfillRequest" :disabled="!fulfillModal.selectedFileUrl" class="ml-auto px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 bg-emerald-600 hover:bg-emerald-700">
+        Complete Delivery & Fulfill
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= QUICK SHARE DRIVE PICKER MODAL ============================= -->
+<div x-show="quickShareDriveModal.open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4" style="background:rgba(0,0,0,.6)" @click.self="quickShareDriveModal.open=false">
+  <div class="glass rounded-2xl w-full max-w-md p-5 fade-in" style="background:var(--bg-2)">
+    <div class="flex items-center justify-between mb-4">
+      <p class="font-display font-semibold text-white text-sm">Select from Google Drive</p>
+      <i data-lucide="x" class="w-4 h-4 cursor-pointer ink-faint" @click="quickShareDriveModal.open=false"></i>
+    </div>
+    <div class="glass rounded-xl p-2 max-h-60 overflow-y-auto space-y-1.5 scrollbar-thin">
+      <template x-if="quickShareDriveModal.loading">
+        <div class="text-center py-4">
+          <div class="w-6 h-6 mx-auto mb-2 rounded-lg border-2 animate-spin" style="border-color:var(--panel-border);border-top-color:var(--accent-2)"></div>
+          <span class="text-xs ink-faint">Loading Google Drive index...</span>
+        </div>
+      </template>
+      <template x-if="!quickShareDriveModal.loading && quickShareDriveModal.files.length">
+        <div>
+          <template x-for="f in quickShareDriveModal.files" :key="f.id">
+            <button @click="selectQuickShareDriveFile(f)" 
+                    class="w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition hover:bg-white/5 border border-transparent">
+              <span class="truncate pr-4 text-white font-medium" x-text="f.name"></span>
+              <span class="font-mono text-[9px] tracking-wider text-cyan-400 shrink-0" x-text="f.mimeType.split('/').pop().toUpperCase()"></span>
+            </button>
+          </template>
+        </div>
+      </template>
+      <template x-if="!quickShareDriveModal.loading && !quickShareDriveModal.files.length">
+        <p class="text-center text-xs py-4 ink-faint">No Google Drive files indexed.</p>
+      </template>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/alpinejs@3.12.0/dist/cdn.min.js" defer></script>
+
+<script>
+const IS_GAS = typeof google !== 'undefined' && !!(google.script && google.script.run);
+
+window.appToken = localStorage.getItem('ws_session_token') || null;
+
+function gasCall(fnName, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(result => {
+        if (result === null || result === undefined) {
+          reject(new Error('The server returned no data for "' + fnName + '".'));
+        } else {
+          resolve(result);
+        }
+      })
+      .withFailureHandler(err => reject(new Error(err && err.message ? err.message : String(err))))
+      [fnName](...args);
+  });
+}
+
+const MOCK_KEY = 'sheets_workspace_dashboard_mock_db_combined';
+const MockDB = (() => {
+  const uid = () => 'm_' + Math.random().toString(36).slice(2, 10);
+  const iso = () => new Date().toISOString();
+
+  function seed() {
+    const me = { email: 'admin@workspace.dev', name: 'Admin User', role: 'Admin', subOffice: 'Omdurman Office' };
+    const today = new Date();
+    const d = (offset) => new Date(today.getTime() + offset * 86400000).toISOString().slice(0, 10);
+    return {
+      me,
+      users: [
+        { email: me.email, name: me.name, role: 'Admin', status: 'Active', addedAt: iso(), lastSeen: iso(), subOffice: 'Omdurman Office', PIN: '1234' },
+        { email: 'staff@workspace.dev', name: 'Al-Hassan', role: 'Staff', status: 'Active', addedAt: iso(), lastSeen: iso(), subOffice: 'Khartoum HQ', PIN: '1111' }
+      ],
+      offices: [
+        { SubOfficeName: 'Omdurman Office', Location: 'Omdurman, Khartoum, Sudan', WifiSSID: 'Sadagaat_Omdurman', WifiPass: 'SadagaatOmd!', Phone: '+249 123 456 789', Status: 'Operational' },
+        { SubOfficeName: 'Khartoum HQ', Location: 'Khartoum Central, Sudan', WifiSSID: 'Sadagaat_HQ', WifiPass: 'SadagaatHQ!', Phone: '+249 987 654 321', Status: 'Operational' }
+      ],
+      tasks: [
+        { id: uid(), title: 'Audit server load parameters', description: 'Monitor high API spike handlers during batch sync.', status: 'In Progress', priority: 'High', assignedTo: me.email, dueDate: d(1), createdBy: me.email, createdAt: iso(), updatedAt: iso() },
+        { id: uid(), title: 'Prepare financial audit Q3', description: 'Ensure expense entries match balance spreadsheet statements.', status: 'To Do', priority: 'Medium', assignedTo: 'staff@workspace.dev', dueDate: d(3), createdBy: me.email, createdAt: iso(), updatedAt: iso() }
+      ],
+      budgets: [
+        { id: uid(), category: 'Hosting', description: 'Google Cloud Platform costs', amount: 120, type: 'Expense', date: d(-4), createdBy: 'admin@workspace.dev', createdAt: iso() },
+        { id: uid(), category: 'Sadagaat Grants', description: 'Direct project donation funding', amount: 1500, type: 'Income', date: d(-1), createdBy: 'staff@workspace.dev', createdAt: iso() }
+      ],
+      chat: [
+        { id: uid(), email: 'staff@workspace.dev', name: 'Al-Hassan', message: 'I have updated the hardware assets database parameters! 👍', createdAt: iso() }
+      ],
+      fileRequests: [
+        { id: uid(), serial: 'REQ-1001', title: 'Q3 Architectural blueprints', description: 'Provide the Lucichart PNG export layout.', requestedFrom: me.email, requestedBy: 'staff@workspace.dev', status: 'Pending', fileUrl: '', fileName: '', uploadedBy: '', createdAt: iso(), updatedAt: iso() },
+        { id: uid(), serial: 'SHR-1002', title: 'Sadagaat Annual Report 2025', description: 'Shared direct document for board members audit.', requestedFrom: 'everyone', requestedBy: 'staff@workspace.dev', status: 'Fulfilled', fileUrl: 'https://drive.google.com', fileName: 'Annual_Report_2025.pdf', uploadedBy: 'staff@workspace.dev', createdAt: d(-2) + 'T14:32:00.000Z', updatedAt: d(-2) + 'T14:32:00.000Z' }
+      ],
+      calendarEvents: [
+        { id: uid(), title: 'Monthly Strategy Sync', date: d(1), time: '14:30', type: 'Meeting' }
+      ],
+      weeklyObjectives: [
+        'Configure double-sync logic for local calendar dates',
+        'Map hardware assets tracker schema'
+      ],
+      plannerDays: {
+        Mon: [ { id: uid(), text: 'Standup deployment check @ 11am' } ],
+        Tue: [], Wed: [], Thu: [], Fri: [], Sat: [], Sun: []
+      },
+      assets: [
+        { id: uid(), serial: 'AST-1001', name: 'Company MacBook Pro 16"', center: 'Khartoum HQ', assignedTo: 'staff@workspace.dev', assignedBy: 'admin@workspace.dev', date: d(-2) },
+        { id: uid(), serial: 'AST-1002', name: 'Figma Enterprise License', center: 'Omdurman Office', assignedTo: '', assignedBy: 'admin@workspace.dev', date: d(-10) }
+      ]
+    };
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(MOCK_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    const fresh = seed();
+    save(fresh);
+    return fresh;
+  }
+  function save(db) { try { localStorage.setItem(MOCK_KEY, JSON.stringify(db)); } catch (e) {} }
+  let db = load();
+
+  const metrics = () => {
+    const byStatus = { 'To Do': 0, 'In Progress': 0, 'Done': 0 };
+    let overdue = 0;
+    const now = new Date();
+    db.tasks.forEach(t => { byStatus[t.status] = (byStatus[t.status] || 0) + 1; if (t.status !== 'Done' && t.dueDate && new Date(t.dueDate) < now) overdue++; });
+    let income = 0, expense = 0; const byCat = {};
+    db.budgets.forEach(b => { if (b.type === 'Income') income += b.amount; else expense += b.amount; byCat[b.category] = (byCat[b.category] || 0) + (b.type === 'Expense' ? b.amount : 0); });
+    return { totalTasks: db.tasks.length, tasksByStatus: byStatus, overdueTasks: overdue, income, expense, balance: income - expense, expenseByCategory: byCat };
+  };
+
+  return {
+    get: () => db,
+    save: (data) => { db = data; save(data); },
+    metrics,
+    login: (e, p) => {
+      const u = db.users.find(x => String(x.email).toLowerCase() === String(e).toLowerCase() && x.PIN === p);
+      if(!u) throw new Error('Bad credentials.');
+      return { token: 'mock_tok_' + Math.random(), user: { email: u.email, name: u.name, role: u.role, subOffice: u.subOffice } };
+    }
+  };
+})();
+
+function dashboardApp() {
+  return {
+    booting: true, authenticated: false, authLoading: false, refreshing: false, theme: 'dark',
+    token: null, user: {}, activeTab: 'overview', search: '',
+    
+    tasks: [], budgets: [], chat: [], fileRequests: [], users: [], assets: [],
+    calendarEvents: [], weeklyObjectives: [], plannerDays: { Mon:[], Tue:[], Wed:[], Thu:[], Fri:[], Sat:[], Sun:[] },
+    
+    metrics: {
+      totalTasks: 0,
+      tasksByStatus: { 'To Do': 0, 'In Progress': 0, 'Done': 0 },
+      overdueTasks: 0,
+      income: 0,
+      expense: 0,
+      balance: 0,
+      expenseByCategory: {}
+    },
+
+    navItems: [
+      { id: 'overview', label: 'Dashboard Overview', icon: 'grid' },
+      { id: 'tasks', label: 'Task Pipelines', icon: 'check-square' },
+      { id: 'assets', label: 'Assets Management', icon: 'laptop' },
+      { id: 'calendar', label: 'Calendar Grid', icon: 'calendar' },
+      { id: 'planner', label: 'Weekly Planner', icon: 'edit-3' },
+      { id: 'requests', label: 'Requests Hub', icon: 'file-text' },
+      { id: 'budgets', label: 'Budget Statements', icon: 'dollar-sign' },
+      { id: 'chat', label: 'Global Team Chat', icon: 'message-square' },
+      { id: 'office', label: 'Office Details', icon: 'building-2' },
+      { id: 'users', label: 'Users & Roles', icon: 'users', adminOnly: true },
+      { id: 'danger', label: 'System Control', icon: 'alert-octagon', adminOnly: true }
+    ],
+
+    loginData: { email: '', pin: '' }, loginError: '', todayLabel: '', mockMode: false, unreadChat: false,
+    taskFilter: { status: '', priority: '' }, budgetFilter: { type: '' }, fileTab: 'incoming', officeDetails: null,
+    
+    toasts: [],
+    toast(type, msg) {
+      const id = Date.now();
+      this.toasts.push({ id, type, message: msg });
+      setTimeout(() => { this.toasts = this.toasts.filter(x => x.id !== id); }, 4500);
+    },
+
+    alertDialog: { open: false, title: '', message: '', type: 'info' },
+    confirmDialog: { open: false, title: '', message: '', action: null },
+    alert(type, t, m) { this.alertDialog = { open: true, type, title: t, message: m }; },
+    confirm(t, m, action) { this.confirmDialog = { open: true, title: t, message: m, action }; },
+    triggerConfirmedAction() {
+      if (this.confirmDialog.action) this.confirmDialog.action();
+      this.confirmDialog.open = false;
+    },
+
+    taskModal: { open: false, data: {} },
+    budgetModal: { open: false, data: {} },
+    assetModal: { open: false, data: {} },
+    eventModal: { open: false, data: {} },
+    fileRequestModal: { open: false, data: {} },
+    fulfillModal: { open: false, data: {}, requestTitle: '', selectedFileId: '', selectedFileUrl: '', selectedFileName: '', driveFiles: [], loadingDrive: false },
+    
+    quickShare: { title: '', description: '', fileUrl: '', fileName: '' },
+    quickShareDriveModal: { open: false, loading: false, files: [] },
+
+    resetScope: 'Tasks', resetConfirm: '',
+
+    init() {
+      this.todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      this.initCalendarMonth();
+      
+      if (!IS_GAS) {
+        this.mockMode = true;
+        this.token = 'mock_tok_admin';
+        this.authenticated = true;
+        this.loadMockData();
+        this.booting = false;
+      } else {
+        if (window.appToken) {
+          this.token = window.appToken;
+          this.pollInitialData();
+        } else {
+          this.booting = false;
+        }
+      }
+      
+      setInterval(() => { if (this.authenticated) this.syncChatSilently(); }, 12000);
+    },
+
+    pollInitialData() {
+      this.refreshing = true;
+      gasCall('api_getInitialData', this.token)
+        .then(res => {
+          this.token = window.appToken;
+          this.authenticated = true;
+          this.mapServerPayload(res);
+        })
+        .catch(err => {
+          this.toast('error', 'Session authentication check failed.');
+          this.logout();
+        })
+        .finally(() => { this.booting = false; this.refreshing = false; });
+    },
+
+    mapServerPayload(data) {
+      this.user = data.me;
+      this.tasks = data.tasks;
+      this.budgets = data.budgets;
+      this.chat = data.chat;
+      this.fileRequests = data.fileRequests;
+      this.users = data.users;
+      this.assets = data.assets;
+      this.calendarEvents = data.calendarEvents;
+      this.weeklyObjectives = data.weeklyObjectives;
+      this.plannerDays = data.plannerDays;
+      this.officeDetails = data.officeDetails;
+      this.metrics = data.metrics;
+      this.$nextTick(() => { this.renderCharts(); lucide.createIcons(); this.scrollChat(); });
+    },
+
+    refreshAll() {
+      if (this.mockMode) {
+        this.loadMockData();
+        this.toast('success', 'Local mock storage sync complete!');
+        return;
+      }
+      this.refreshing = true;
+      gasCall('api_getInitialData', this.token)
+        .then(res => {
+          this.mapServerPayload(res);
+          this.toast('success', 'Database tables mapped successfully!');
+        })
+        .catch(err => this.alert('error', 'Sync Failure', err.message))
+        .finally(() => { this.refreshing = false; });
+    },
+
+    login() {
+      this.authLoading = true;
+      this.loginError = '';
+      if (this.mockMode) {
+        try {
+          const res = MockDB.login(this.loginData.email, this.loginData.pin);
+          this.token = res.token;
+          this.user = res.user;
+          this.authenticated = true;
+          this.loadMockData();
+          this.toast('success', `Welcome back ${res.user.name}!`);
+        } catch(err) {
+          this.loginError = err.message;
+        } finally { this.authLoading = false; }
+        return;
+      }
+
+      gasCall('api_login', this.loginData.email, this.loginData.pin)
+        .then(res => {
+          localStorage.setItem('ws_session_token', res.token);
+          window.appToken = res.token;
+          this.token = res.token;
+          this.pollInitialData();
+        })
+        .catch(err => { this.loginError = err.message; })
+        .finally(() => { this.authLoading = false; });
+    },
+
+    logout() {
+      if (IS_GAS && this.token) { gasCall('api_logout', this.token); }
+      localStorage.removeItem('ws_session_token');
+      window.appToken = null;
+      this.token = null;
+      this.authenticated = false;
+      this.user = {};
+    },
+
+    handleCsvImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const rows = text.split('\n').map(row => row.trim()).filter(row => row.length > 0);
+        if (rows.length < 2) {
+          this.toast('error', 'Spreadsheet contains no database values.');
+          return;
+        }
+
+        const headers = rows[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
+        const idIdx = headers.indexOf('id');
+        const serialIdx = headers.indexOf('serial');
+        const nameIdx = headers.indexOf('name');
+        const centerIdx = headers.indexOf('center');
+        const assignToIdx = headers.indexOf('assignto') !== -1 ? headers.indexOf('assignto') : headers.indexOf('assignedto');
+        const assignByIdx = headers.indexOf('assignby') !== -1 ? headers.indexOf('assignby') : headers.indexOf('assignedby');
+        const dateIdx = headers.indexOf('date');
+
+        if (nameIdx === -1) {
+          this.toast('error', 'Missing required header column labeled "Name" in spreadsheet.');
+          return;
+        }
+
+        const parsedAssets = [];
+        for (let i = 1; i < rows.length; i++) {
+          const columns = [];
+          let current = '';
+          let inQuotes = false;
+          for (let char of rows[i]) {
+            if (char === '"') { inQuotes = !inQuotes; }
+            else if (char === ',' && !inQuotes) { columns.push(current.trim().replace(/^["']|["']$/g, '')); current = ''; }
+            else { current += char; }
+          }
+          columns.push(current.trim().replace(/^["']|["']$/g, ''));
+
+          if (columns[nameIdx]) {
+            parsedAssets.push({
+              id: idIdx !== -1 ? columns[idIdx] : '',
+              serial: serialIdx !== -1 ? columns[serialIdx] : '',
+              name: columns[nameIdx],
+              center: centerIdx !== -1 ? columns[centerIdx] : 'Central Hub',
+              assignedTo: assignToIdx !== -1 ? columns[assignToIdx] : '',
+              assignedBy: assignByIdx !== -1 ? columns[assignByIdx] : this.user.email,
+              date: dateIdx !== -1 && columns[dateIdx] ? columns[dateIdx] : new Date().toISOString().slice(0, 10)
+            });
+          }
+        }
+
+        if (!parsedAssets.length) {
+          this.toast('error', 'No valid rows containing asset data were parsed.');
+          return;
+        }
+
+        this.toast('info', `Queueing ingestion for ${parsedAssets.length} asset records...`);
+        this.refreshing = true;
+
+        if (this.mockMode) {
+          parsedAssets.forEach(item => {
+            const serialNum = 1001 + this.assets.length;
+            const freshId = item.id || ('m_ast_' + Math.random().toString(36).slice(2, 10));
+            const existingAsset = this.assets.filter(x => x.id === freshId)[0];
+            
+            if (existingAsset) {
+              Object.assign(existingAsset, {
+                serial: item.serial || existingAsset.serial,
+                name: item.name,
+                center: item.center,
+                assignedTo: item.assignedTo,
+                assignedBy: item.assignedBy || this.user.email,
+                date: item.date
+              });
+            } else {
+              this.assets.push({
+                id: freshId,
+                serial: item.serial || ('AST-' + serialNum),
+                name: item.name,
+                center: item.center,
+                assignedTo: item.assignedTo,
+                assignedBy: item.assignedBy || this.user.email,
+                date: item.date
+              });
+            }
+          });
+          this.saveMock();
+          this.toast('success', `Ingestion complete! ${parsedAssets.length} assets synced locally.`);
+          this.refreshing = false;
+        } else {
+          gasCall('api_importAssets', this.token, parsedAssets)
+            .then(res => {
+              this.assets = res;
+              this.toast('success', `Database synchronization complete! ${parsedAssets.length} assets imported.`);
+            })
+            .catch(err => this.alert('error', 'Bulk CSV Ingestion Failure', err.message))
+            .finally(() => { this.refreshing = false; });
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    },
+
+    downloadAssetCsvTemplate() {
+      const headers = ['Id', 'Serial', 'Name', 'Center', 'AssignedTo', 'AssignedBy', 'Date'];
+      const sampleRows = [
+        ['', '', 'Lenovo ThinkPad X1', 'Omdurman Office', 'staff@workspace.dev', 'admin@workspace.dev', '2026-07-14'],
+        ['', '', 'Samsung QLED 4K Display', 'Khartoum HQ', '', 'admin@workspace.dev', '2026-07-14']
+      ];
+      let csvContent = headers.join(',') + '\n';
+      sampleRows.forEach(row => {
+        csvContent += row.map(val => `"${val}"`).join(',') + '\n';
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'assets_import_template.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      this.toast('success', 'Excel CSV template download completed!');
+    },
+
+    initials(n) { return String(n||'').split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2); },
+    fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '—'; },
+    
+    fmtDateTime(d) {
+      if (!d) return '—';
+      const dt = new Date(d);
+      return dt.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) + ' ' +
+             dt.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', hour12:true });
+    },
+
+    money(v) { return '$' + Number(v||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 }); },
+    timeAgo(t) {
+      if (!t) return '—';
+      const sec = Math.floor((new Date() - new Date(t)) / 1000);
+      if (sec < 60) return 'just now';
+      const min = Math.floor(sec / 60); if (min < 60) return min + 'm ago';
+      const hr = Math.floor(min / 60); if (hr < 24) return hr + 'h ago';
+      return Math.floor(hr / 24) + 'd ago';
+    },
+
+    loadMockData() {
+      const d = MockDB.get();
+      this.user = d.me;
+      this.tasks = d.tasks;
+      this.budgets = d.budgets;
+      this.chat = d.chat;
+      this.fileRequests = d.fileRequests;
+      this.users = d.users;
+      this.assets = d.assets;
+      this.calendarEvents = d.calendarEvents;
+      this.weeklyObjectives = d.weeklyObjectives;
+      this.plannerDays = d.plannerDays;
+      this.officeDetails = d.offices.find(o => o.SubOfficeName === d.me.subOffice) || null;
+      this.metrics = MockDB.metrics();
+      this.$nextTick(() => { this.renderCharts(); lucide.createIcons(); this.scrollChat(); });
+    },
+
+    saveMock() {
+      const current = MockDB.get();
+      current.tasks = this.tasks;
+      current.budgets = this.budgets;
+      current.chat = this.chat;
+      current.fileRequests = this.fileRequests;
+      current.users = this.users;
+      current.assets = this.assets;
+      current.calendarEvents = this.calendarEvents;
+      current.weeklyObjectives = this.weeklyObjectives;
+      current.plannerDays = this.plannerDays;
+      MockDB.save(current);
+      this.metrics = MockDB.metrics();
+      this.renderCharts();
+    },
+
+    openTaskModal(task = null) {
+      this.taskModal.data = task ? JSON.parse(JSON.stringify(task)) : { title: '', description: '', status: 'To Do', priority: 'Medium', assignedTo: this.user.email, dueDate: '' };
+      this.taskModal.open = true;
+    },
+    saveTask() {
+      if (!this.taskModal.data.title) return this.toast('error', 'Title parameter cannot be empty.');
+      this.taskModal.open = false;
+      this.refreshing = true;
+      if (this.mockMode) {
+        if (this.taskModal.data.id) {
+          this.tasks = this.tasks.map(x => x.id === this.taskModal.data.id ? Object.assign(x, this.taskModal.data, { updatedAt: new Date().toISOString() }) : x);
+        } else {
+          this.taskModal.data.id = 'm_' + Math.random().toString(36).slice(2,8);
+          this.taskModal.data.createdAt = new Date().toISOString();
+          this.taskModal.data.updatedAt = new Date().toISOString();
+          this.taskModal.data.createdBy = this.user.email;
+          this.tasks.push(this.taskModal.data);
+        }
+        this.saveMock();
+        this.toast('success', 'Local mock task pipelines updated!');
+        this.refreshing = false;
+      } else {
+        const flow = this.taskModal.data.id ? gasCall('api_updateTask', this.token, this.taskModal.data.id, this.taskModal.data) : gasCall('api_addTask', this.token, this.taskModal.data);
+        flow.then(res => { this.tasks = res; this.toast('success', 'Pipelines committed!'); })
+          .catch(err => this.alert('error', 'Task Mutation Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    deleteTask(id) {
+      this.confirm('Delete Pipeline Item', 'Permanently delete this task card?', () => {
+        this.taskModal.open = false;
+        this.refreshing = true;
+        if (this.mockMode) {
+          this.tasks = this.tasks.filter(x => x.id !== id);
+          this.saveMock();
+          this.toast('success', 'Mock pipeline deleted.');
+          this.refreshing = false;
+        } else {
+          gasCall('api_deleteTask', this.token, id)
+            .then(res => { this.tasks = res; this.toast('success', 'Card purged from database.'); })
+            .catch(err => this.alert('error', 'Erase Error', err.message))
+            .finally(() => { this.refreshing = false; });
+        }
+      });
+    },
+
+    openAssetModal(asset = null) {
+      this.assetModal.data = asset ? JSON.parse(JSON.stringify(asset)) : { name: '', center: 'Omdurman Office', assignedTo: '', assignedBy: this.user.email, date: new Date().toISOString().slice(0, 10) };
+      this.assetModal.open = true;
+    },
+    saveAsset() {
+      if (!this.assetModal.data.name) return this.toast('error', 'Asset descriptor identifier is required.');
+      this.assetModal.open = false;
+      this.refreshing = true;
+      if (this.mockMode) {
+        if (this.assetModal.data.id) {
+          this.assets = this.assets.map(x => x.id === this.assetModal.data.id ? Object.assign({}, x, this.assetModal.data) : x);
+          this.toast('success', 'Mock asset updated!');
+        } else {
+          const serialNum = 1001 + this.assets.length;
+          this.assetModal.data.id = 'm_ast_' + Math.random().toString(36).slice(2, 10);
+          this.assetModal.data.serial = 'AST-' + serialNum;
+          if (!this.assetModal.data.assignedBy) this.assetModal.data.assignedBy = this.user.email;
+          this.assets.push(this.assetModal.data);
+          this.toast('success', 'Mock asset indexed!');
+        }
+        this.saveMock();
+        this.refreshing = false;
+      } else {
+        const flow = this.assetModal.data.id 
+          ? gasCall('api_updateAsset', this.token, this.assetModal.data.id, this.assetModal.data)
+          : gasCall('api_addAsset', this.token, this.assetModal.data);
+          
+        flow.then(res => { this.assets = res; this.toast('success', 'Asset parameters committed!'); })
+          .catch(err => this.alert('error', 'Commit Asset Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    deleteAsset(id) {
+      this.confirm('Purge Operational Asset', 'De-register this device/license?', () => {
+        this.refreshing = true;
+        if (this.mockMode) {
+          this.assets = this.assets.filter(x => x.id !== id);
+          this.saveMock();
+          this.toast('success', 'Mock asset removed.');
+          this.refreshing = false;
+        } else {
+          gasCall('api_deleteAsset', this.token, id)
+            .then(res => { this.assets = res; this.toast('success', 'Asset record purged.'); })
+            .catch(err => this.alert('error', 'Deletion Error', err.message))
+            .finally(() => { this.refreshing = false; });
+        }
+      });
+    },
+
+    openFileRequestModal() {
+      this.fileRequestModal.data = { title: '', description: '', requestedFrom: '' };
+      this.fileRequestModal.open = true;
+    },
+    saveFileRequest() {
+      if (!this.fileRequestModal.data.title || !this.fileRequestModal.data.requestedFrom) {
+        return this.toast('error', 'Fulfillment target user and parameter title cannot be empty.');
+      }
+      this.fileRequestModal.open = false;
+      this.refreshing = true;
+      if (this.mockMode) {
+        const reqNum = 1001 + this.fileRequests.length;
+        const fresh = {
+          id: 'm_req_' + Math.random().toString(36).slice(2, 10),
+          serial: 'REQ-' + reqNum,
+          title: this.fileRequestModal.data.title,
+          description: this.fileRequestModal.data.description,
+          requestedFrom: String(this.fileRequestModal.data.requestedFrom).trim().toLowerCase(),
+          requestedBy: String(this.user.email).trim().toLowerCase(),
+          status: 'Pending', fileUrl: '', fileName: '', uploadedBy: '',
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+        };
+        this.fileRequests.push(fresh);
+        this.saveMock();
+        this.toast('success', 'Request broadcasted locally!');
+        this.refreshing = false;
+      } else {
+        gasCall('api_addFileRequest', this.token, this.fileRequestModal.data)
+          .then(res => { this.fileRequests = res; this.toast('success', 'Request broadcasted to recipient!'); })
+          .catch(err => this.alert('error', 'Broadcast Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    openFulfillModal(req) {
+      this.fulfillModal.data = req;
+      this.fulfillModal.requestTitle = req.title;
+      this.fulfillModal.selectedFileId = '';
+      this.fulfillModal.selectedFileUrl = '';
+      this.fulfillModal.selectedFileName = '';
+      this.fulfillModal.driveFiles = [];
+      this.fulfillModal.loadingDrive = true;
+      this.fulfillModal.open = true;
+
+      if (this.mockMode) {
+        setTimeout(() => {
+          this.fulfillModal.driveFiles = [
+            { id: 'drv1', name: 'Sadagaat Q3 Internal blueprints.pdf', url: 'https://drive.google.com', mimeType: 'application/pdf' },
+            { id: 'drv2', name: 'Weekly Objectives Draft.csv', url: 'https://drive.google.com', mimeType: 'text/csv' }
+          ];
+          this.fulfillModal.loadingDrive = false;
+        }, 800);
+      } else {
+        gasCall('api_getMyDriveFiles', this.token)
+          .then(res => { this.fulfillModal.driveFiles = res; })
+          .catch(err => this.toast('error', 'Missing Drive polling scope authorization.'))
+          .finally(() => { this.fulfillModal.loadingDrive = false; });
+      }
+    },
+    selectDriveFile(f) {
+      this.fulfillModal.selectedFileId = f.id;
+      this.fulfillModal.selectedFileUrl = f.url;
+      this.fulfillModal.selectedFileName = f.name;
+    },
+    fulfillRequest() {
+      if (!this.fulfillModal.selectedFileUrl) return this.toast('error', 'Select a Drive index or enter a URL target.');
+      this.fulfillModal.open = false;
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.fileRequests = this.fileRequests.map(x => x.id === this.fulfillModal.data.id ? Object.assign(x, {
+          status: 'Fulfilled',
+          fileUrl: this.fulfillModal.selectedFileUrl,
+          fileName: this.fulfillModal.selectedFileName || 'Manual Link Attachment',
+          uploadedBy: String(this.user.email).trim().toLowerCase(),
+          updatedAt: new Date().toISOString()
+        }) : x);
+        this.saveMock();
+        this.toast('success', 'Delivery attachment verified!');
+        this.refreshing = false;
+      } else {
+        gasCall('api_fulfillFileRequest', this.token, this.fulfillModal.data.id, this.fulfillModal.selectedFileUrl, this.fulfillModal.selectedFileName)
+          .then(res => { this.fileRequests = res; this.toast('success', 'File delivery processed!'); })
+          .catch(err => this.alert('error', 'Delivery Failure', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+
+    openQuickShareDrivePicker() {
+      this.quickShareDriveModal.open = true;
+      this.quickShareDriveModal.loading = true;
+      if (this.mockMode) {
+        setTimeout(() => {
+          this.quickShareDriveModal.files = [
+            { id: 'drv1', name: 'Strategic Expansion Guidelines 2026.pdf', url: 'https://drive.google.com', mimeType: 'application/pdf' },
+            { id: 'drv2', name: 'Main HQ Logistics Checklist.xlsx', url: 'https://drive.google.com', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+            { id: 'drv3', name: 'Workflow Architecture diagram.png', url: 'https://drive.google.com', mimeType: 'image/png' }
+          ];
+          this.quickShareDriveModal.loading = false;
+        }, 600);
+      } else {
+        gasCall('api_getMyDriveFiles', this.token)
+          .then(res => { this.quickShareDriveModal.files = res; })
+          .catch(err => this.toast('error', 'Could not fetch Google Drive files.'))
+          .finally(() => { this.quickShareDriveModal.loading = false; });
+      }
+    },
+    selectQuickShareDriveFile(f) {
+      this.quickShare.fileUrl = f.url;
+      this.quickShare.fileName = f.name;
+      if (!this.quickShare.title) {
+        this.quickShare.title = f.name.substring(0, f.name.lastIndexOf('.')) || f.name;
+      }
+      this.quickShareDriveModal.open = false;
+    },
+    postQuickShare() {
+      if (!this.quickShare.title || !this.quickShare.fileUrl) return;
+      this.refreshing = true;
+      if (this.mockMode) {
+        const reqNum = 1001 + this.fileRequests.length;
+        const freshShare = {
+          id: 'm_sh_' + Math.random().toString(36).slice(2, 10),
+          serial: 'SHR-' + reqNum,
+          title: this.quickShare.title,
+          description: this.quickShare.description || '',
+          requestedFrom: 'everyone',
+          requestedBy: String(this.user.email).trim().toLowerCase(),
+          status: 'Fulfilled',
+          fileUrl: this.quickShare.fileUrl,
+          fileName: this.quickShare.fileName || 'Shared Document',
+          uploadedBy: String(this.user.email).trim().toLowerCase(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        this.fileRequests.push(freshShare);
+        this.saveMock();
+        this.quickShare = { title: '', description: '', fileUrl: '', fileName: '' };
+        this.toast('success', 'File posted to team timeline!');
+        this.refreshing = false;
+      } else {
+        gasCall('api_shareFileDirectly', this.token, this.quickShare.title, this.quickShare.description, this.quickShare.fileUrl, this.quickShare.fileName)
+          .then(res => {
+            this.fileRequests = res;
+            this.quickShare = { title: '', description: '', fileUrl: '', fileName: '' };
+            this.toast('success', 'File posted successfully!');
+          })
+          .catch(err => this.alert('error', 'Posting Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+
+    calendarMonth: null, calendarMonthName: '', calendarDays: [],
+    initCalendarMonth() {
+      const now = new Date();
+      this.calendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      this.rebuildCalendar();
+    },
+    prevMonth() {
+      this.calendarMonth.setMonth(this.calendarMonth.getMonth() - 1);
+      this.rebuildCalendar();
+    },
+    nextMonth() {
+      this.calendarMonth.setMonth(this.calendarMonth.getMonth() + 1);
+      this.rebuildCalendar();
+    },
+    rebuildCalendar() {
+      this.calendarMonthName = this.calendarMonth.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+      const year = this.calendarMonth.getFullYear();
+      const month = this.calendarMonth.getMonth();
+      const firstDayIdx = new Date(year, month, 1).getDay();
+      const numDays = new Date(year, month + 1, 0).getDate();
+      
+      const days = [];
+      const prevNumDays = new Date(year, month, 0).getDate();
+      for (let i = firstDayIdx - 1; i >= 0; i--) {
+        const d = new Date(year, month - 1, prevNumDays - i);
+        days.push({ date: d, isCurrentMonth: false, dateStr: d.toISOString().slice(0,10), tasks: [], events: [] });
+      }
+      
+      for (let i = 1; i <= numDays; i++) {
+        const d = new Date(year, month, i);
+        days.push({ date: d, isCurrentMonth: true, dateStr: d.toISOString().slice(0,10), tasks: [], events: [] });
+      }
+      
+      const totalCells = 42;
+      let nextMonthDay = 1;
+      while (days.length < totalCells) {
+        const d = new Date(year, month + 1, nextMonthDay++);
+        days.push({ date: d, isCurrentMonth: false, dateStr: d.toISOString().slice(0,10), tasks: [], events: [] });
+      }
+      
+      days.forEach(day => {
+        day.tasks = this.tasks.filter(t => t.dueDate && t.dueDate.slice(0,10) === day.dateStr);
+        day.events = this.calendarEvents.filter(e => e.date && e.date.slice(0,10) === day.dateStr);
+      });
+      
+      this.calendarDays = days;
+    },
+    openEventModal(dateStr = '') {
+      this.eventModal.data = { title: '', date: dateStr || new Date().toISOString().slice(0,10), time: '12:00', type: 'Meeting' };
+      this.eventModal.open = true;
+    },
+    saveEvent() {
+      if (!this.eventModal.data.title) return this.toast('error', 'Title is a required parameter.');
+      this.eventModal.open = false;
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.eventModal.data.id = 'm_ev_' + Math.random().toString(36).slice(2, 10);
+        this.eventModal.data.createdBy = this.user.email;
+        this.calendarEvents.push(this.eventModal.data);
+        this.saveMock();
+        this.rebuildCalendar();
+        this.toast('success', 'Local mock database event created!');
+        this.refreshing = false;
+      } else {
+        gasCall('api_addEvent', this.token, this.eventModal.data)
+          .then(res => { this.calendarEvents = res; this.rebuildCalendar(); this.toast('success', 'Event pushed to Google Calendar!'); })
+          .catch(err => this.alert('error', 'Sync Failure', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    deleteEvent(id) {
+      this.confirm('Delete Scheduled Event', 'Remove this from Google Calendar?', () => {
+        this.refreshing = true;
+        if (this.mockMode) {
+          this.calendarEvents = this.calendarEvents.filter(x => x.id !== id);
+          this.saveMock();
+          this.rebuildCalendar();
+          this.toast('success', 'Event erased.');
+          this.refreshing = false;
+        } else {
+          gasCall('api_deleteEvent', this.token, id)
+            .then(res => { this.calendarEvents = res; this.rebuildCalendar(); this.toast('success', 'Event updated across platforms.'); })
+            .catch(err => this.alert('error', 'Sync Delete Error', err.message))
+            .finally(() => { this.refreshing = false; });
+        }
+      });
+    },
+
+    plannerObjectiveDraft: '',
+    addWeeklyObjective() {
+      if (!this.plannerObjectiveDraft.trim()) return;
+      this.refreshing = true;
+      const draft = this.plannerObjectiveDraft.trim();
+      this.plannerObjectiveDraft = '';
+      if (this.mockMode) {
+        this.weeklyObjectives.push(draft);
+        this.saveMock();
+        this.toast('success', 'Mock objective saved.');
+        this.refreshing = false;
+      } else {
+        gasCall('api_addWeeklyObjective', this.token, draft)
+          .then(res => { this.weeklyObjectives = res; this.toast('success', 'Objective committed.'); })
+          .catch(err => this.alert('error', 'Creation Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    removeWeeklyObjective(idx) {
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.weeklyObjectives.splice(idx, 1);
+        this.saveMock();
+        this.refreshing = false;
+      } else {
+        gasCall('api_removeWeeklyObjective', this.token, idx)
+          .then(res => { this.weeklyObjectives = res; this.toast('success', 'Objective removed.'); })
+          .catch(err => this.alert('error', 'Deletion Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    addPlannerItem(day, txt) {
+      if (!txt || !txt.trim()) return;
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.plannerDays[day].push({ id: 'm_pl_' + Math.random().toString(36).slice(2, 8), text: txt.trim() });
+        this.saveMock();
+        this.refreshing = false;
+      } else {
+        gasCall('api_addPlannerItem', this.token, day, txt.trim())
+          .then(res => { this.plannerDays = res; })
+          .catch(err => this.alert('error', 'Planner Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    removePlannerItem(day, id) {
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.plannerDays[day] = this.plannerDays[day].filter(x => x.id !== id);
+        this.saveMock();
+        this.refreshing = false;
+      } else {
+        gasCall('api_removePlannerItem', this.token, day, id)
+          .then(res => { this.plannerDays = res; })
+          .catch(err => this.alert('error', 'Planner Delete Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+
+    openBudgetModal(entry = null) {
+      this.budgetModal.data = entry ? JSON.parse(JSON.stringify(entry)) : { type: 'Expense', date: new Date().toISOString().slice(0, 10), category: '', description: '', amount: '' };
+      this.budgetModal.open = true;
+    },
+    saveBudget() {
+      if (!this.budgetModal.data.category || !this.budgetModal.data.amount) return this.toast('error', 'Amount and category fields must contain values.');
+      this.budgetModal.open = false;
+      this.refreshing = true;
+      if (this.mockMode) {
+        if (this.budgetModal.data.id) {
+          this.budgets = this.budgets.map(x => x.id === this.budgetModal.data.id ? Object.assign(x, this.budgetModal.data) : x);
+        } else {
+          this.budgetModal.data.id = 'm_bg_' + Math.random().toString(36).slice(2,8);
+          this.budgetModal.data.createdAt = new Date().toISOString();
+          this.budgetModal.data.createdBy = this.user.email;
+          this.budgets.push(this.budgetModal.data);
+        }
+        this.saveMock();
+        this.toast('success', 'Transactions updated!');
+        this.refreshing = false;
+      } else {
+        const flow = this.budgetModal.data.id ? gasCall('api_updateBudget', this.token, this.budgetModal.data.id, this.budgetModal.data) : gasCall('api_addBudget', this.token, this.budgetModal.data);
+        flow.then(res => { this.budgets = res; this.toast('success', 'Commit Success!'); })
+          .catch(err => this.alert('error', 'Commit Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    deleteBudget(id) {
+      this.confirm('Delete Transaction', 'Permanently erase this budget entry?', () => {
+        this.budgetModal.open = false;
+        this.refreshing = true;
+        if (this.mockMode) {
+          this.budgets = this.budgets.filter(x => x.id !== id);
+          this.saveMock();
+          this.toast('success', 'Mock transaction statement deleted.');
+          this.refreshing = false;
+        } else {
+          gasCall('api_deleteBudget', this.token, id)
+            .then(res => { this.budgets = res; this.toast('success', 'Entry deleted.'); })
+            .catch(err => this.alert('error', 'Deletion Failure', err.message))
+            .finally(() => { this.refreshing = false; });
+        }
+      });
+    },
+
+    chatDraft: '',
+    sendChat() {
+      if (!this.chatDraft.trim()) return;
+      const draft = this.chatDraft.trim();
+      this.chatDraft = '';
+      if (this.mockMode) {
+        this.chat.push({ id: 'm_ch_' + Math.random().toString(36).slice(2, 8), email: this.user.email, name: this.user.name, message: draft, createdAt: new Date().toISOString() });
+        this.saveMock();
+        this.$nextTick(() => { this.scrollChat(); });
+        return;
+      }
+      gasCall('api_postChatMessage', this.token, draft)
+        .then(res => { this.chat = res; this.$nextTick(() => { this.scrollChat(); }); })
+        .catch(err => this.toast('error', 'Message delivery failed.'));
+    },
+    syncChatSilently() {
+      if (this.mockMode) return;
+      gasCall('api_getChatMessages', this.token)
+        .then(res => {
+          if (res.length > this.chat.length) {
+            this.chat = res;
+            this.unreadChat = true;
+            this.$nextTick(() => { this.scrollChat(); });
+          }
+        });
+    },
+    scrollChat() {
+      const scroll = this.$refs.chatScroll;
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
+    },
+
+    newUser: { email:'', name:'', role:'Staff', subOffice:'', pin:'1234' },
+    addUser() {
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.users.push({ email: this.newUser.email, name: this.newUser.name || 'External Colleague', role: this.newUser.role, status: 'Active', addedAt: new Date().toISOString(), PIN: this.newUser.pin, subOffice: this.newUser.subOffice });
+        this.saveMock();
+        this.newUser = { email:'', name:'', role:'Staff', subOffice:'', pin:'1234' };
+        this.refreshing = false;
+        this.toast('success', 'Mock user credentials added.');
+      } else {
+        gasCall('api_addUser', this.token, this.newUser.email, this.newUser.name, this.newUser.role, this.newUser.subOffice, this.newUser.pin)
+          .then(res => { this.users = res; this.newUser = { email:'', name:'', role:'Staff', subOffice:'', pin:'1234' }; this.toast('success', 'User authorized.'); })
+          .catch(err => this.alert('error', 'Access Control Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    updateUserStatus(email, status) {
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.users = this.users.map(u => u.email === email ? Object.assign(u, { status }) : u);
+        this.saveMock();
+        this.refreshing = false;
+      } else {
+        gasCall('api_updateUserStatus', this.token, email, status)
+          .then(res => { this.users = res; })
+          .catch(err => this.alert('error', 'Action Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    updateUserRole(email, role) {
+      this.refreshing = true;
+      if (this.mockMode) {
+        this.users = this.users.map(u => u.email === email ? Object.assign(u, { role }) : u);
+        this.saveMock();
+        this.refreshing = false;
+      } else {
+        gasCall('api_updateUserRole', this.token, email, role)
+          .then(res => { this.users = res; this.toast('success', 'User security credentials updated.'); })
+          .catch(err => this.alert('error', 'Action Error', err.message))
+          .finally(() => { this.refreshing = false; });
+      }
+    },
+    removeUser(email) {
+      this.confirm('Purge Authorized User', `De-authorize credential paths for ${email}?`, () => {
+        this.refreshing = true;
+        if (this.mockMode) {
+          this.users = this.users.filter(u => u.email !== email);
+          this.saveMock();
+          this.refreshing = false;
+        } else {
+          gasCall('api_removeUser', this.token, email)
+            .then(res => { this.users = res; this.toast('success', 'User purged.'); })
+            .catch(err => this.alert('error', 'Purge Error', err.message))
+            .finally(() => { this.refreshing = false; });
+        }
+      });
+    },
+
+    resetDatabase() {
+      this.confirm('Critical Database Purge', `Are you absolutely certain you want to erase ${this.resetScope} records?`, () => {
+        this.refreshing = true;
+        if (this.mockMode) {
+          if (this.resetScope === 'all') {
+            this.tasks = []; this.budgets = []; this.chat = []; this.fileRequests = []; this.assets = [];
+          } else {
+            this[this.resetScope.charAt(0).toLowerCase() + this.resetScope.slice(1)] = [];
+          }
+          this.saveMock();
+          this.resetConfirm = '';
+          this.refreshing = false;
+          this.toast('success', 'Mock scope tables purged.');
+        } else {
+          gasCall('api_resetDatabase', this.token, this.resetScope, this.resetConfirm)
+            .then(res => { this.mapServerPayload(res); this.toast('success', 'Scope data purged successfully.'); })
+            .catch(err => this.alert('error', 'Truncation Failure', err.message))
+            .finally(() => { this.refreshing = false; this.resetConfirm = ''; });
+        }
+      });
+    },
+
+    chartInstances: {},
+    renderCharts() {
+      const isDark = this.theme === 'dark';
+      const textColor = isDark ? '#e7ebf1' : '#0f172a';
+      const gridColor = isDark ? 'rgba(255,255,255,.03)' : 'rgba(15,23,42,.05)';
+
+      const destroyChart = (id) => { if (this.chartInstances[id]) { this.chartInstances[id].destroy(); delete this.chartInstances[id]; } };
+      
+      destroyChart('tasks');
+      const ctxTasks = document.getElementById('chartTasks');
+      if (ctxTasks) {
+        this.chartInstances['tasks'] = new Chart(ctxTasks, {
+          type: 'doughnut',
+          data: {
+            labels: ['To Do', 'In Progress', 'Done'],
+            datasets: [{
+              data: [this.metrics.tasksByStatus['To Do']||0, this.metrics.tasksByStatus['In Progress']||0, this.metrics.tasksByStatus['Done']||0],
+              backgroundColor: ['#fb7185', '#3b82f6', '#16a34a'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { color: textColor, font: { size: 10 } } } }
+          }
+        });
+      }
+
+      destroyChart('expenses');
+      const ctxExpense = document.getElementById('chartExpense');
+      if (ctxExpense) {
+        const catKeys = Object.keys(this.metrics.expenseByCategory || {});
+        const catVals = Object.values(this.metrics.expenseByCategory || {});
+        this.chartInstances['expenses'] = new Chart(ctxExpense, {
+          type: 'bar',
+          data: {
+            labels: catKeys.length ? catKeys : ['No Expenses'],
+            datasets: [{
+              data: catVals.length ? catVals : [0],
+              backgroundColor: '#a78bfa',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 9 } } },
+              y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 9 } } }
+            }
+          }
+        });
+      }
+
+      destroyChart('finance');
+      const ctxFinance = document.getElementById('chartFinance');
+      if (ctxFinance) {
+        this.chartInstances['finance'] = new Chart(ctxFinance, {
+          type: 'pie',
+          data: {
+            labels: ['Total Income', 'Total Expense'],
+            datasets: [{
+              data: [this.metrics.income || 0, this.metrics.expense || 0],
+              backgroundColor: ['#16a34a', '#fb7185'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'bottom', labels: { color: textColor, font: { size: 10 } } } }
+          }
+        });
+      }
+    },
+
+    get isStaff() { return String(this.user.role).toLowerCase() === 'staff'; },
+    get isAdmin() { return String(this.user.role).toLowerCase() === 'admin'; },
+    
+    get filteredTasks() {
+      return this.tasks.filter(t => {
+        const matchesSearch = !this.search || t.title.toLowerCase().includes(this.search.toLowerCase()) || (t.description && t.description.toLowerCase().includes(this.search.toLowerCase()));
+        const matchesStatus = !this.taskFilter.status || t.status === this.taskFilter.status;
+        const matchesPrio = !this.taskFilter.priority || t.priority === this.taskFilter.priority;
+        return matchesSearch && matchesStatus && matchesPrio;
+      });
+    },
+
+    get filteredAssets() {
+      return this.assets.filter(a => {
+        return !this.search || a.name.toLowerCase().includes(this.search.toLowerCase()) || 
+               (a.center && a.center.toLowerCase().includes(this.search.toLowerCase())) || 
+               (a.assignedTo && a.assignedTo.toLowerCase().includes(this.search.toLowerCase())) ||
+               (a.serial && a.serial.toLowerCase().includes(this.search.toLowerCase())) ||
+               (a.id && a.id.toLowerCase().includes(this.search.toLowerCase()));
+      });
+    },
+
+    get filteredBudgets() {
+      return this.budgets.filter(b => {
+        const matchesSearch = !this.search || b.category.toLowerCase().includes(this.search.toLowerCase()) || (b.description && b.description.toLowerCase().includes(this.search.toLowerCase()));
+        const matchesType = !this.budgetFilter.type || b.type === this.budgetFilter.type;
+        return matchesSearch && matchesType;
+      });
+    },
+
+    // معالجة حالة الأحرف ومطابقتها بشكل آمن تماماً بين المدخل والـ Sheet
+    get incomingRequests() {
+      return this.fileRequests.filter(r => String(r.requestedFrom || '').toLowerCase() === String(this.user.email || '').toLowerCase());
+    },
+    get outgoingRequests() {
+      return this.fileRequests.filter(r => String(r.requestedBy || '').toLowerCase() === String(this.user.email || '').toLowerCase());
+    },
+
+    get fileChatStream() {
+      return this.fileRequests
+        .filter(r => r.status === 'Fulfilled')
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    },
+
+    get counts() {
+      return {
+        tasks: this.tasks.filter(t => t.status !== 'Done').length,
+        pendingFiles: this.fileRequests.filter(r => String(r.requestedFrom || '').toLowerCase() === String(this.user.email || '').toLowerCase() && r.status === 'Pending').length
+      };
+    },
+
+    get recentActivity() {
+      const items = [];
+      this.tasks.forEach(t => items.push({ id: t.id, icon: 'check-square', text: `Task "${t.title}" is in state [${t.status}]`, at: t.updatedAt || t.createdAt }));
+      this.budgets.slice(-5).forEach(b => items.push({ id: b.id, icon: 'dollar-sign', text: `Transaction "${b.category}" logged: ${this.money(b.amount)}`, at: b.createdAt }));
+      this.fileRequests.slice(-5).forEach(r => items.push({ id: r.id, icon: 'file-text', text: `Document shared: "${r.title}" [${r.status}]`, at: r.updatedAt || r.createdAt }));
+      this.assets.slice(-5).forEach(a => items.push({ id: a.id, icon: 'laptop', text: `Asset index updated: ${a.name} (${a.serial})`, at: a.date }));
+      return items.sort((a,b) => new Date(b.at) - new Date(a.at)).slice(0, 15);
+    },
+
+    prioStyle(p) {
+      if (p === 'High') return 'background:rgba(251,113,133,.15);color:var(--rose)';
+      if (p === 'Medium') return 'background:rgba(245,165,36,.15);color:var(--amber)';
+      return 'background:rgba(59,130,246,.15);color:var(--accent-2)';
+    },
+    isOverdue(t) { return t.status !== 'Done' && t.dueDate && new Date(t.dueDate) < new Date(); }
+  };
+}
+</script>
+</body>
+</html>
